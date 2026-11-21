@@ -1,0 +1,703 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Wanderwege-Filter · Daten: Waymarked Trails / OpenStreetMap</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+  :root{--green:#5a7d2a;--green-l:#e9f0dc;--ink:#1f2a1a;--muted:#6b7563;--line:#d8dfcf;--easy:#2e8b57;--mid:#d18b00;--hard:#c0392b}
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color:var(--ink);font-size:14px}
+  header{background:linear-gradient(90deg,#7a9a3c,#a9c46a);color:#fff;padding:10px 16px;display:flex;align-items:center;gap:12px}
+  header h1{font-size:18px;margin:0;font-weight:700;text-shadow:0 1px 2px rgba(0,0,0,.25)}
+  header small{opacity:.9}
+  #app{display:grid;grid-template-columns:410px 1fr;height:calc(100% - 46px)}
+  aside{border-right:1px solid var(--line);display:flex;flex-direction:column;min-height:0;background:#fbfcf8}
+  #controls{padding:8px 12px 6px;border-bottom:1px solid var(--line);flex-shrink:0;display:flex;flex-direction:column;gap:5px}
+  .sec{font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-top:2px}
+  .grid{display:grid;grid-template-columns:auto minmax(0,1fr);gap:5px 8px;align-items:center}
+  .lbl{font-size:12px;color:var(--muted);white-space:nowrap}
+  .grid input[type=number]{flex:1;width:0;min-width:0}
+  .foot{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;font-size:12px;color:var(--muted)}
+  .foot label{display:flex;align-items:center;gap:4px}
+  details{text-align:right}
+  details summary{cursor:pointer;color:var(--green)}
+  details[open]{position:relative}
+  details[open] .hint{position:absolute;right:0;top:18px;width:300px;text-align:left;background:#fff;border:1px solid var(--line);border-radius:8px;padding:8px 10px;box-shadow:0 4px 14px rgba(0,0,0,.12);z-index:1000}
+  #map{height:100%}
+  fieldset{border:0;padding:0;margin:0 0 12px}
+  legend{font-weight:600;margin-bottom:6px;font-size:13px;text-transform:uppercase;letter-spacing:.03em;color:var(--muted)}
+  .row{display:flex;gap:6px;align-items:center}
+  input[type=text],input[type=number],select{padding:5px 8px;border:1px solid var(--line);border-radius:6px;font:inherit;width:100%;background:#fff}
+  input[type=number]{width:80px}
+  button{padding:6px 10px;border:0;border-radius:6px;background:var(--green);color:#fff;font:inherit;cursor:pointer;white-space:nowrap}
+  button.secondary{background:#fff;color:var(--green);border:1px solid var(--green)}
+  button:disabled{opacity:.5;cursor:default}
+  .chips{display:flex;gap:4px;flex-wrap:nowrap}
+  .chip{display:inline-flex;align-items:center;gap:3px;padding:2px 7px;font-size:12px;border:1px solid var(--line);border-radius:999px;background:#fff;cursor:pointer;user-select:none}
+  .chip input{margin:0;width:12px;height:12px}
+  .grid > *{min-width:0}
+  .grid select{width:100%}
+  .dot{width:9px;height:9px;border-radius:50%;display:inline-block}
+  .hint{color:var(--muted);font-size:12px;margin-top:4px;line-height:1.35}
+  #status{padding:6px 12px;align-items:center;font-size:12px;color:var(--muted);border-bottom:1px solid var(--line);display:flex;justify-content:space-between;gap:8px}
+  .statusRight{display:flex;align-items:center;gap:8px;flex-shrink:0}
+  button.small{padding:3px 8px;font-size:12px}
+  button.on{background:#ff00a8;border-color:#ff00a8;color:#fff}
+  .pop{font-size:13px}
+  .pop-h{display:flex;gap:8px;align-items:center;margin-bottom:6px;font-size:14px}
+  .pop-h img{width:30px;height:30px;object-fit:contain}
+  .pop table{border-collapse:collapse;width:100%}
+  .pop th{text-align:left;font-weight:500;color:var(--muted);padding:2px 8px 2px 0;vertical-align:top;white-space:nowrap}
+  .pop td{padding:2px 0}
+  .pop .src{color:var(--muted);font-size:11px}
+  .surf{display:flex;height:7px;border-radius:4px;overflow:hidden;margin:3px 0 1px;width:100%}
+  .pop-l{display:flex;flex-wrap:wrap;gap:4px 12px;margin-top:8px;padding-top:6px;border-top:1px solid var(--line)}
+  .pop-l a{color:#c4007f}
+  #progress{height:3px;background:var(--green);width:0;transition:width .2s}
+  #list{overflow:auto;flex:1;min-height:0}
+  .item{padding:10px 14px;border-bottom:1px solid var(--line);display:grid;grid-template-columns:36px 1fr;gap:10px;cursor:pointer}
+  .item:hover{background:var(--green-l)}
+  .item.active{background:#ffe0f3;box-shadow:inset 4px 0 0 #ff00a8}
+  .item img{width:32px;height:32px;object-fit:contain}
+  .item .name{font-weight:600;line-height:1.25}
+  .meta{display:flex;flex-wrap:wrap;gap:4px 10px;margin-top:4px;color:var(--muted);font-size:12px}
+  .badge{display:inline-block;padding:1px 7px;border-radius:999px;color:#fff;font-size:11px;font-weight:600}
+  .b-leicht{background:var(--easy)}.b-mittel{background:var(--mid)}.b-schwer{background:var(--hard)}.b-unbekannt{background:#999}
+  .links{margin-top:5px;font-size:12px;display:flex;gap:10px}
+  .links a{color:var(--green)}
+  .empty{padding:20px 14px;color:var(--muted)}
+  #pager{flex-shrink:0;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 14px;border-top:1px solid var(--line);background:#fff}
+  #pager:empty{display:none}
+  #pager span{font-size:12px;color:var(--muted)}
+  #filterToggle{display:none}
+  /* ---------- Handy ---------- */
+  @media (max-width:800px){
+    html,body{height:auto}
+    header{padding:8px 12px;flex-wrap:wrap;gap:2px 10px}
+    header h1{font-size:16px}
+    header small{font-size:11px}
+    #app{display:flex;flex-direction:column;height:auto}
+    #map{order:0;height:48vh;height:48svh;position:sticky;top:0;z-index:500;border-bottom:2px solid var(--line)}
+    aside{order:1;border-right:0}
+    #list{overflow:visible}
+    #controls{gap:7px}
+    input[type=text],input[type=number],select{font-size:16px;padding:7px 9px} /* verhindert Auto-Zoom auf dem iPhone */
+    button{padding:8px 12px}
+    .chip{padding:5px 9px;font-size:13px}
+    .chips{flex-wrap:wrap}
+    #filterToggle{display:flex;justify-content:space-between;align-items:center;width:100%;background:#fff;color:var(--green);border:1px solid var(--green)}
+    #controls.collapsed .grid, #controls.collapsed .foot{display:none}
+    #controls .sec.filterSec{display:none}
+    .item{padding:12px}
+    .links{gap:14px;font-size:13px}
+    #pager{position:sticky;bottom:0}
+    .leaflet-popup-content{margin:10px 12px}
+    details[open] .hint{width:min(300px,85vw)}
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>🥾 Wanderwege-Filter</h1>
+  <small>Daten: <a href="https://hiking.waymarkedtrails.org" target="_blank" style="color:#fff">Waymarked Trails</a> · © OpenStreetMap-Mitwirkende (ODbL)</small>
+</header>
+<div id="app">
+  <aside>
+    <div id="controls">
+      <div class="sec">Gebiet</div>
+      <div class="row">
+        <input id="place" type="text" placeholder="Ort suchen, z. B. Mainz" autocomplete="off">
+        <button id="goPlace">Gehe zu</button>
+      </div>
+      <div class="row">
+        <button id="loadArea" style="flex:1">Wege im Ausschnitt laden</button>
+        <button id="addArea" class="secondary" title="Weitere Wege dazuladen, die bisherigen bleiben erhalten">+ hinzufügen</button>
+      </div>
+      <div class="row">
+        <input id="nameSearch" type="text" placeholder="…oder Wegname suchen, z. B. Rheinsteig">
+        <button id="goName" class="secondary">Suchen</button>
+      </div>
+
+      <div class="sec filterSec">Filter</div>
+      <button id="filterToggle" type="button"><span>⚙️ Filter &amp; Sortierung</span><span id="filterArrow">▾</span></button>
+      <div class="grid">
+        <span class="lbl">Schwierigkeit</span>
+        <div class="chips" id="diffChips">
+          <label class="chip"><input type="checkbox" value="leicht" checked><span class="dot" style="background:var(--easy)"></span>leicht</label>
+          <label class="chip"><input type="checkbox" value="mittel" checked><span class="dot" style="background:var(--mid)"></span>mittel</label>
+          <label class="chip"><input type="checkbox" value="schwer" checked><span class="dot" style="background:var(--hard)"></span>schwer</label>
+          <label class="chip" title="Schwierigkeit nicht ermittelbar"><input type="checkbox" value="unbekannt" checked><span class="dot" style="background:#999"></span>?</label>
+        </div>
+
+        <span class="lbl">Länge (km)</span>
+        <div class="row"><input id="lenMin" type="number" min="0" step="1" placeholder="von"> – <input id="lenMax" type="number" min="0" step="1" placeholder="bis"></div>
+
+        <span class="lbl">Höhenmeter ↑</span>
+        <div class="row"><input id="hmMin" type="number" min="0" step="50" placeholder="von"> – <input id="hmMax" type="number" min="0" step="50" placeholder="bis"></div>
+
+        <span class="lbl">Wegform</span>
+        <select id="round">
+          <option value="all">alle</option>
+          <option value="yes">nur Rundwege</option>
+          <option value="no">nur Streckenwanderungen</option>
+        </select>
+
+        <span class="lbl">Kategorie</span>
+        <div class="chips" id="groupChips">
+          <label class="chip"><input type="checkbox" value="LOC" checked>lokal</label>
+          <label class="chip"><input type="checkbox" value="REG" checked>regional</label>
+          <label class="chip"><input type="checkbox" value="NAT" checked>national</label>
+          <label class="chip"><input type="checkbox" value="INT" checked>int.</label>
+        </div>
+
+        <span class="lbl">Sortierung</span>
+        <select id="sort">
+          <option value="name">Name</option>
+          <option value="len">Länge</option>
+          <option value="hm">Höhenmeter</option>
+          <option value="diff">Schwierigkeit</option>
+        </select>
+      </div>
+      <div class="foot">
+        <label><input type="checkbox" id="inclUnknown" checked> Wege mit fehlenden Daten zeigen</label>
+        <details><summary>Wie wird gerechnet?</summary>
+          <p class="hint"><b>Schwierigkeit:</b> Haben die Wegabschnitte in OSM eine SAC-Skala, wird sie genutzt (T1 leicht, T2 mittel, ab T3 schwer). Sonst gilt km + Höhenmeter/100: unter 12 leicht, unter 22 mittel, sonst schwer.<br><b>Rundweg:</b> OSM-Tag <code>roundtrip</code>, sonst Start ≈ Ziel (&lt; 300 m, mit * markiert).</p>
+        </details>
+      </div>
+    </div>
+    <div id="progress"></div>
+    <div id="status"><span id="statusText">Ort suchen oder Karte verschieben, dann „Wege im Ausschnitt laden“.</span><span class="statusRight"><span id="count"></span><button id="showAll" class="secondary small" title="Alle gefilterten Wege auf der Karte anzeigen">🗺️ Alle auf Karte</button></span></div>
+    <div id="list"></div>
+    <div id="pager"></div>
+  </aside>
+  <div id="map"></div>
+</div>
+
+<script>
+const API = 'https://hiking.waymarkedtrails.org/api/v1';
+const SITE = 'https://hiking.waymarkedtrails.org';
+const GROUP_LABEL = {INT:'international', NAT:'national', REG:'regional', LOC:'lokal'};
+const DIFF_ORDER = {leicht:1, mittel:2, schwer:3, unbekannt:4};
+const SAC_RANK = {hiking:1, mountain_hiking:2, demanding_mountain_hiking:3, alpine_hiking:4, demanding_alpine_hiking:5, difficult_alpine_hiking:6};
+
+// ---------- Karte ----------
+const map = L.map('map').setView([50.0, 8.27], 11);
+// Hinweis: tile.openstreetmap.org blockiert lokal geöffnete Dateien (kein Referer) → andere Kartenanbieter
+const baseLayers = {
+  'Topografisch (Esri)': L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}', {maxZoom:19, attribution:'Karte © Esri und Partner'}),
+  'Straßenkarte (Esri)': L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {maxZoom:19, attribution:'Karte © Esri und Partner'}),
+  'OpenTopoMap': L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {maxZoom:17, subdomains:'abc', attribution:'© OpenStreetMap-Mitwirkende, SRTM | © OpenTopoMap (CC-BY-SA)'})
+};
+baseLayers['Topografisch (Esri)'].addTo(map);
+const trailsOverlay = L.tileLayer('https://tile.waymarkedtrails.org/hiking/{z}/{x}/{y}.png', {maxZoom:18, opacity:.8, attribution:'Wanderwege: <a href="https://hiking.waymarkedtrails.org">Waymarked Trails</a>'}).addTo(map);
+L.control.layers(baseLayers, {'Wanderwege (Waymarked Trails)': trailsOverlay}).addTo(map);
+const allLayer = L.layerGroup().addTo(map);
+const routeLayer = L.layerGroup().addTo(map);
+const PINK = '#ff00a8';
+const placeLayer = L.layerGroup().addTo(map); // roter Kreis für den gesuchten Ort
+
+const SM = L.Projection.SphericalMercator;
+const toLatLng = ([x,y]) => SM.unproject(L.point(x,y));
+const mercBBox = () => {
+  const b = map.getBounds(), sw = SM.project(b.getSouthWest()), ne = SM.project(b.getNorthEast());
+  return [sw.x, sw.y, ne.x, ne.y];
+};
+
+// ---------- Zustand & Cache ----------
+let routes = new Map();   // id -> Daten
+let activeId = null;
+let loadToken = 0;
+const CACHE_KEY = 'wmt-filter-cache-v2';
+let cache = {};
+try { cache = JSON.parse(localStorage.getItem(CACHE_KEY) || '{}'); } catch(e) { cache = {}; }
+function saveCache(){ try { localStorage.setItem(CACHE_KEY, JSON.stringify(cache)); } catch(e) { /* voll oder nicht verfügbar */ } }
+
+// ---------- API ----------
+async function getJSON(url){
+  const r = await fetch(url);
+  if (r.status === 404) return null;
+  if (!r.ok) throw new Error(r.status + ' ' + url);
+  return r.json();
+}
+
+async function listByArea(bbox, depth=0){
+  const data = await getJSON(`${API}/list/by_area?bbox=${bbox.map(n=>n.toFixed(1)).join(',')}&limit=100`);
+  let res = data ? data.results : [];
+  // Die API liefert max. 100 Treffer – dann den Ausschnitt vierteln
+  if (res.length >= 100 && depth < 2){
+    const [x0,y0,x1,y1] = bbox, mx=(x0+x1)/2, my=(y0+y1)/2;
+    const parts = await Promise.all([[x0,y0,mx,my],[mx,y0,x1,my],[x0,my,mx,y1],[mx,my,x1,y1]].map(b=>listByArea(b, depth+1)));
+    const seen = new Map(res.map(r=>[r.id,r]));
+    parts.flat().forEach(r=>seen.set(r.id,r));
+    res = [...seen.values()];
+  }
+  return res;
+}
+
+// alle Wegabschnitte einer Route in Routenreihenfolge einsammeln
+function collectLines(node, out=[]){
+  if (!node) return out;
+  if (Array.isArray(node)) { node.forEach(n=>collectLines(n,out)); return out; }
+  if (node.ways) { out.push({ways: node.ways, relId: null}); return out; }
+  if (node.main) {
+    node.main.forEach(child => {
+      const before = out.length;
+      collectLines(child, out);
+      if (child.id) for (let i=before;i<out.length;i++) if (!out[i].relId) out[i].relId = child.id;
+    });
+  }
+  if (node.forward) collectLines(node.forward, out);
+  return out;
+}
+
+function ascentFromElevation(lines, elevBySeg){
+  let up=0, down=0, found=0;
+  for (const line of lines){
+    for (const w of line.ways){
+      const seg = elevBySeg[w.id]; if (!seg || !seg.elevation || seg.elevation.length<2) continue;
+      let pts = seg.elevation;
+      const g = w.geometry && w.geometry.coordinates;
+      if (g && g.length){
+        const [gx,gy] = g[0], a = pts[0], b = pts[pts.length-1];
+        if (Math.hypot(b.x-gx,b.y-gy) < Math.hypot(a.x-gx,a.y-gy)) pts = [...pts].reverse();
+      }
+      for (let i=1;i<pts.length;i++){ const d = pts[i].ele - pts[i-1].ele; if (d>0) up+=d; else down-=d; }
+      found++;
+    }
+  }
+  return found ? {up:Math.round(up), down:Math.round(down)} : null;
+}
+
+async function loadDetails(base){
+  if (cache[base.id]) return {...cache[base.id], geom: null};
+  const d = await getJSON(`${API}/details/relation/${base.id}`);
+  if (!d) return null;
+  const lines = collectLines(d.route);
+  const allWays = lines.flatMap(l=>l.ways);
+
+  // Länge
+  const length = (d.route && d.route.length) || d.official_length || null;
+
+  // Rundweg
+  let round = null, roundSrc = 'osm';
+  const rt = d.tags && d.tags.roundtrip;
+  if (rt === 'yes') round = true; else if (rt === 'no') round = false;
+  if (round === null && allWays.length){
+    const first = allWays[0].geometry.coordinates[0];
+    const lastW = allWays[allWays.length-1].geometry.coordinates;
+    const last = lastW[lastW.length-1];
+    const lat = toLatLng(first).lat;
+    const dist = Math.hypot(first[0]-last[0], first[1]-last[1]) * Math.cos(lat*Math.PI/180);
+    round = dist < 300; roundSrc = 'berechnet';
+  }
+
+  // Höhenmeter
+  let elev = null;
+  const e = await getJSON(`${API}/details/relation/${base.id}/way-elevation?simplify=21`).catch(()=>null);
+  let eleMin = null, eleMax = null;
+  const mm = x => { if (x && x.min_elevation != null){ eleMin = eleMin==null ? x.min_elevation : Math.min(eleMin, x.min_elevation); eleMax = eleMax==null ? x.max_elevation : Math.max(eleMax, x.max_elevation); } };
+  mm(e);
+  if (e && e.segments) elev = ascentFromElevation(lines, e.segments);
+  else {
+    // Superroute: Teilrouten einzeln abfragen
+    const subIds = [...new Set(lines.map(l=>l.relId).filter(Boolean))].slice(0,30);
+    let up=0, down=0, ok=0;
+    for (const sid of subIds){
+      const se = await getJSON(`${API}/details/relation/${sid}/way-elevation?simplify=21`).catch(()=>null);
+      if (!se || !se.segments) continue;
+      mm(se);
+      const r = ascentFromElevation(lines.filter(l=>l.relId===sid), se.segments);
+      if (r){ up+=r.up; down+=r.down; ok++; }
+    }
+    if (ok) elev = {up, down};
+  }
+
+  // SAC-Skala (Route selbst oder schwierigster Wegabschnitt)
+  let sac = null;
+  const consider = v => { if (v && SAC_RANK[v] && (!sac || SAC_RANK[v] > SAC_RANK[sac])) sac = v; };
+  consider(d.tags && d.tags.sac_scale);
+  allWays.forEach(w => consider(w.tags && w.tags.sac_scale));
+
+  // Schwierigkeit
+  let diff = 'unbekannt', diffSrc = '';
+  if (sac){ const r = SAC_RANK[sac]; diff = r===1?'leicht':r===2?'mittel':'schwer'; diffSrc = 'SAC ' + ['','T1','T2','T3','T4','T5','T6'][r]; }
+  else if (length){
+    const score = length/1000 + (elev ? elev.up/100 : 0);
+    diff = score < 12 ? 'leicht' : score < 22 ? 'mittel' : 'schwer';
+    diffSrc = elev ? 'berechnet' : 'berechnet (ohne Hm)';
+  }
+
+  // Untergrund: Anteil befestigt / unbefestigt nach Weglänge
+  const PAVED = /^(asphalt|paved|concrete|concrete:plates|concrete:lanes|paving_stones|sett|cobblestone|unhewn_cobblestone|metal|wood)$/;
+  let paved=0, unpaved=0, unknownSurf=0;
+  allWays.forEach(w => { const sf = w.tags && w.tags.surface, l = w.length || 0;
+    if (!sf) unknownSurf += l; else if (PAVED.test(sf)) paved += l; else unpaved += l; });
+  const surfTotal = paved + unpaved + unknownSurf;
+  const t = d.tags || {};
+  const info = {
+    from: t.from || null, to: t.to || null, operator: d.operator || t.operator || null,
+    website: d.url || t.website || null, description: t.description || t.note || null,
+    symbolDesc: d.symbol_description || base.symbol_description || null,
+    officialLength: d.official_length || null, eleMin, eleMax,
+    surf: surfTotal ? {paved: paved/surfTotal, unpaved: unpaved/surfTotal, unknown: unknownSurf/surfTotal} : null,
+    id: base.id, name: d.name || base.name || '(ohne Namen)', ref: d.ref || base.ref || '',
+    group: d.group || base.group, symbol: d.symbol_id || base.symbol_id,
+    length, round, roundSrc, up: elev ? elev.up : null, down: elev ? elev.down : null,
+    diff, diffSrc, bbox: d.bbox
+  };
+  cache[base.id] = info;
+  return {...info, geom: allWays.map(w=>w.geometry.coordinates)};
+}
+
+// ---------- Laden ----------
+async function loadList(listPromise, label, append=false){
+  const token = ++loadToken;
+  if (!append){ routes = new Map(); activeId = null; routeLayer.clearLayers(); allLayer.clearLayers(); }
+  page = 0; render();
+  setStatus(`${label} – Wegliste wird geladen…`);
+  let list;
+  try { list = await listPromise; }
+  catch(e){ setStatus('Fehler beim Laden der Wegliste: ' + e.message + ' (Internetverbindung?)'); return; }
+  if (token !== loadToken) return;
+  list = list.filter(b => !routes.has(b.id));
+  if (!list.length){ setStatus(append ? `Keine neuen Wege gefunden – insgesamt ${routes.size}.` : 'Keine Wanderwege gefunden.'); render(); return; }
+
+  let done = 0; const total = list.length;
+  const queue = [...list];
+  setProgress(0);
+  async function worker(){
+    while (queue.length && token === loadToken){
+      const base = queue.shift();
+      try {
+        const info = await loadDetails(base);
+        if (info && token === loadToken) routes.set(info.id, info);
+      } catch(e){ console.warn(e); }
+      done++;
+      if (token === loadToken){ setProgress(done/total); setStatus(`${label} – Details ${done}/${total} geladen…`); scheduleRender(); }
+    }
+  }
+  await Promise.all(Array.from({length:5}, worker));
+  if (token !== loadToken) return;
+  saveCache(); setProgress(0);
+  setStatus(`${label} – ${total} Wege geladen, insgesamt ${routes.size}.`);
+  render();
+  if (showAllOn) drawAll();
+}
+
+// Die Namenssuche von Waymarked Trails liefert je nach "limit" unterschiedlich viele Treffer
+// und kennt keine zweite Seite → mehrere Abfragen zusammenführen
+async function searchByName(q){
+  const lims = [10, 12, 15, 20, 30, 50, 100];
+  const all = await Promise.all(lims.map(l => getJSON(`${API}/list/search?query=${encodeURIComponent(q)}&limit=${l}`).catch(()=>null)));
+  const seen = new Map();
+  all.forEach(d => d && d.results && d.results.forEach(r => { if (r.type === 'relation' || !r.type) seen.set(r.id, r); }));
+  return [...seen.values()];
+}
+
+// ---------- Filtern & Anzeigen ----------
+const $ = id => document.getElementById(id);
+const checked = id => [...document.querySelectorAll(`#${id} input:checked`)].map(i=>i.value);
+const num = id => { const v = $(id).value; return v === '' ? null : Number(v); };
+
+function filtered(){
+  const diffs = checked('diffChips'), groups = checked('groupChips');
+  const lMin = num('lenMin'), lMax = num('lenMax'), hMin = num('hmMin'), hMax = num('hmMax');
+  const round = $('round').value, incl = $('inclUnknown').checked;
+  const out = [...routes.values()].filter(r => {
+    if (!diffs.includes(r.diff)) return false;
+    if (r.group && !groups.includes(r.group)) return false;
+    if (lMin!==null || lMax!==null){
+      if (r.length==null){ if (!incl) return false; }
+      else { const km = r.length/1000; if (lMin!==null && km<lMin) return false; if (lMax!==null && km>lMax) return false; }
+    }
+    if (hMin!==null || hMax!==null){
+      if (r.up==null){ if (!incl) return false; }
+      else { if (hMin!==null && r.up<hMin) return false; if (hMax!==null && r.up>hMax) return false; }
+    }
+    if (round==='yes' && r.round!==true) return false;
+    if (round==='no' && r.round!==false) return false;
+    return true;
+  });
+  const s = $('sort').value;
+  const nn = v => v==null ? Infinity : v;
+  out.sort((a,b) => s==='len' ? nn(a.length)-nn(b.length) : s==='hm' ? nn(a.up)-nn(b.up)
+    : s==='diff' ? DIFF_ORDER[a.diff]-DIFF_ORDER[b.diff] || nn(a.length)-nn(b.length)
+    : a.name.localeCompare(b.name,'de'));
+  return out;
+}
+
+const esc = s => String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let renderTimer = null;
+function scheduleRender(){ if (!renderTimer) renderTimer = setTimeout(()=>{ renderTimer=null; render(); }, 250); }
+
+const PAGE_SIZE = 25;
+let page = 0;
+function render(){
+  const list = filtered();
+  $('count').textContent = routes.size ? `${list.length} von ${routes.size}` : '';
+  $('pager').innerHTML = '';
+  if (!routes.size){ $('list').innerHTML = '<div class="empty">Noch keine Wege geladen.</div>'; return; }
+  if (!list.length){ $('list').innerHTML = '<div class="empty">Kein Weg passt zu den Filtern.</div>'; return; }
+  const pages = Math.max(1, Math.ceil(list.length / PAGE_SIZE));
+  if (page >= pages) page = pages - 1;
+  if (page < 0) page = 0;
+  // Leiste immer anzeigen – auch wenn nach dem Filtern alles auf eine Seite passt
+  $('pager').innerHTML = `<button class="secondary" data-p="-1" ${page===0?'disabled':''}>‹ zurück</button>
+    <span>Seite ${page+1} von ${pages} · ${page*PAGE_SIZE+1}–${Math.min((page+1)*PAGE_SIZE, list.length)} von ${list.length}</span>
+    <button class="secondary" data-p="1" ${page>=pages-1?'disabled':''}>weiter ›</button>`;
+  $('list').innerHTML = list.slice(page*PAGE_SIZE, (page+1)*PAGE_SIZE).map(r => `
+    <div class="item${r.id===activeId?' active':''}" data-id="${r.id}">
+      <img src="${API}/symbols/id/${encodeURIComponent(r.symbol||'')}.svg" alt="" loading="lazy" onerror="this.style.visibility='hidden'">
+      <div>
+        <div class="name">${esc(r.name)}${r.ref?` <span style="color:var(--muted);font-weight:400">(${esc(r.ref)})</span>`:''}</div>
+        <div class="meta">
+          <span class="badge b-${r.diff}" title="${esc(r.diffSrc)}">${r.diff}</span>
+          <span>📏 ${r.length!=null ? (r.length/1000).toFixed(1).replace('.',',')+' km' : '–'}</span>
+          <span>⛰️ ${r.up!=null ? '↑'+r.up+' m ↓'+r.down+' m' : 'Hm unbekannt'}</span>
+          <span>${r.round===true?'🔄 Rundweg':r.round===false?'➡️ Strecke':'?'}${r.roundSrc==='berechnet'?'*':''}</span>
+          <span>${GROUP_LABEL[r.group]||''}</span>
+        </div>
+        <div class="links">
+          <a href="${SITE}/#route?id=${r.id}" target="_blank">Auf Waymarked Trails</a>
+          <a href="#" data-gpx="${r.id}">GPX herunterladen</a>
+          <a href="https://www.openstreetmap.org/relation/${r.id}" target="_blank">OSM</a>
+        </div>
+      </div>
+    </div>`).join('');
+}
+
+async function showRoute(id, fit=true){
+  activeId = id; render();
+  routeLayer.clearLayers();
+  const r = routes.get(id);
+  if (!r) return;
+  setStatus('Verlauf wird geladen…');
+  const geom = await getGeom(r).catch(()=>[]);
+  setStatus(`${routes.size} Wege geladen.`);
+  if (!geom.length || activeId !== id) return;
+  const lines = geom.map(c => c.map(toLatLng));
+  L.polyline(lines, {color:'#fff', weight:10, opacity:.9}).addTo(routeLayer); // heller Rand
+  const pl = L.polyline(lines, {color:PINK, weight:6, opacity:1}).bindTooltip(r.name, {sticky:true})
+    .on('click', e => L.popup({maxWidth:340, minWidth:280}).setLatLng(e.latlng).setContent(popupHtml(r)).openOn(map)).addTo(routeLayer);
+  L.circleMarker(lines[0][0], {radius:7, color:'#fff', weight:2, fillColor:PINK, fillOpacity:1}).addTo(routeLayer).bindTooltip('Start: ' + r.name)
+    .on('click', e => L.popup({maxWidth:340, minWidth:280}).setLatLng(e.latlng).setContent(popupHtml(r)).openOn(map));
+  if (fit) map.fitBounds(pl.getBounds(), {padding:[30,30]});
+}
+
+// ---------- Steckbrief-Fenster beim Anklicken eines Weges ----------
+function walkTime(r){
+  // Gehzeit nach DIN 33466: 4 km/h, 300 Hm/h bergauf, 500 Hm/h bergab
+  if (r.length == null) return null;
+  const h = (r.length/1000)/4, v = (r.up||0)/300 + (r.down||0)/500;
+  const tot = Math.max(h,v) + Math.min(h,v)/2;
+  const hh = Math.floor(tot), mi = Math.round((tot-hh)*60/5)*5;
+  return mi === 60 ? `${hh+1}:00 h` : `${hh}:${String(mi).padStart(2,'0')} h`;
+}
+const kmStr = m => (m/1000).toFixed(1).replace('.',',') + ' km';
+function popupHtml(r){
+  const rows = [];
+  const row = (k,v) => { if (v != null && v !== '') rows.push(`<tr><th>${k}</th><td>${v}</td></tr>`); };
+  row('Schwierigkeit', `<span class="badge b-${r.diff}">${r.diff}</span> <span class="src">${esc(r.diffSrc||'')}</span>`);
+  row('Länge', r.length!=null ? kmStr(r.length) + (r.officialLength && Math.abs(r.officialLength-r.length)>500 ? ` <span class="src">(offiziell ${kmStr(r.officialLength)})</span>` : '') : '–');
+  row('Höhenmeter', r.up!=null ? `↑ ${r.up} m · ↓ ${r.down} m` : 'unbekannt');
+  if (r.eleMin!=null) row('Höhe', `${Math.round(r.eleMin)} – ${Math.round(r.eleMax)} m ü. NN`);
+  const wt = walkTime(r); if (wt) row('Gehzeit (ca.)', wt + ' <span class="src">nach DIN 33466</span>');
+  row('Wegform', r.round===true ? '🔄 Rundweg' : r.round===false ? '➡️ Streckenwanderung' : '?');
+  if (r.from || r.to) row('Verlauf', `${esc(r.from||'?')} → ${esc(r.to||'?')}`);
+  if (r.surf){
+    const pc = x => Math.round(x*100);
+    row('Untergrund', `<div class="surf"><span style="width:${pc(r.surf.paved)}%;background:#8a8a8a"></span><span style="width:${pc(r.surf.unpaved)}%;background:#b58b4c"></span><span style="width:${pc(r.surf.unknown)}%;background:#ddd"></span></div>
+      <span class="src">${pc(r.surf.paved)} % befestigt · ${pc(r.surf.unpaved)} % naturbelassen${r.surf.unknown>0.01?` · ${pc(r.surf.unknown)} % ohne Angabe`:''}</span>`);
+  }
+  row('Kategorie', GROUP_LABEL[r.group] || '');
+  if (r.symbolDesc) row('Markierung', esc(r.symbolDesc));
+  if (r.operator) row('Betreuer', esc(r.operator));
+  if (r.description) row('Beschreibung', esc(r.description));
+  return `<div class="pop">
+    <div class="pop-h"><img src="${API}/symbols/id/${encodeURIComponent(r.symbol||'')}.svg" alt="" onerror="this.style.display='none'">
+      <div><b>${esc(r.name)}</b>${r.ref?`<div class="src">${esc(r.ref)}</div>`:''}</div></div>
+    <table>${rows.join('')}</table>
+    <div class="pop-l">
+      <a href="#" data-gpx="${r.id}">GPX herunterladen</a>
+      <a href="#" data-listid="${r.id}">In Liste zeigen</a>
+      <a href="${SITE}/#route?id=${r.id}" target="_blank">Waymarked Trails</a>
+      ${r.website ? `<a href="${esc(r.website)}" target="_blank">Website</a>` : ''}
+    </div></div>`;
+}
+function openPopup(r, latlng){
+  showRoute(r.id, false);
+  L.popup({maxWidth:340, minWidth:280, autoPanPadding:[20,20]}).setLatLng(latlng).setContent(popupHtml(r)).openOn(map);
+}
+// Klicks auf Links im Fenster
+map.getContainer().addEventListener('click', e => {
+  const g = e.target.closest('.pop a[data-gpx]');
+  if (g){ e.preventDefault(); downloadGPX(Number(g.dataset.gpx)); return; }
+  const li = e.target.closest('.pop a[data-listid]');
+  if (li){ e.preventDefault(); scrollToItem(Number(li.dataset.listid)); }
+});
+
+// ---------- Alle Ergebnisse auf der Karte ----------
+let showAllOn = false, allToken = 0;
+async function drawAll(){
+  const token = ++allToken;
+  allLayer.clearLayers();
+  if (!showAllOn) return;
+  const list = filtered();
+  if (!list.length){ setStatus('Keine Wege zum Anzeigen.'); return; }
+  const bounds = L.latLngBounds([]);
+  let done = 0;
+  const queue = [...list];
+  async function worker(){
+    while (queue.length && token === allToken){
+      const r = queue.shift();
+      const geom = await getGeom(r).catch(()=>[]);
+      if (token !== allToken) return;
+      if (geom.length){
+        const lines = geom.map(c => c.map(toLatLng));
+        const pl = L.polyline(lines, {color:PINK, weight:3.5, opacity:.75})
+          .bindTooltip(r.name, {sticky:true})
+          .on('click', e => openPopup(r, e.latlng))
+          .on('mouseover', e => e.target.setStyle({weight:6, opacity:1}))
+          .on('mouseout',  e => e.target.setStyle({weight:3.5, opacity:.75}))
+          .addTo(allLayer);
+        L.circleMarker(lines[0][0], {radius:4, color:'#fff', weight:1.5, fillColor:PINK, fillOpacity:1})
+          .bindTooltip('Start: ' + r.name).on('click', e => openPopup(r, e.latlng))
+          .addTo(allLayer);
+        bounds.extend(pl.getBounds());
+      }
+      done++;
+      setStatus(`Karte: ${done}/${list.length} Wege gezeichnet…`);
+    }
+  }
+  await Promise.all(Array.from({length:5}, worker));
+  if (token !== allToken) return;
+  setStatus(`${list.length} Wege auf der Karte – anklicken zum Auswählen.`);
+  if (bounds.isValid()) map.fitBounds(bounds, {padding:[30,30]});
+}
+function scrollToItem(id){
+  const list = filtered();
+  const idx = list.findIndex(r => r.id === id);
+  if (idx < 0) return;
+  page = Math.floor(idx / PAGE_SIZE); render();
+  const el = document.querySelector(`.item[data-id="${id}"]`);
+  if (el) el.scrollIntoView({block:'nearest'});
+}
+
+// ---------- UI ----------
+function setStatus(t){ $('statusText').textContent = t; }
+function setProgress(p){ $('progress').style.width = (p*100)+'%'; }
+
+// ---------- GPX-Export (wird im Browser aus dem Routenverlauf erzeugt) ----------
+async function getGeom(r){
+  if (!r.geom){
+    const d = await getJSON(`${API}/details/relation/${r.id}`);
+    if (d) r.geom = collectLines(d.route).flatMap(l=>l.ways).map(w=>w.geometry.coordinates);
+  }
+  return r.geom || [];
+}
+async function downloadGPX(id){
+  const r = routes.get(id); if (!r) return;
+  setStatus('GPX wird erstellt…');
+  try {
+    const geom = await getGeom(r);
+    if (!geom.length){ setStatus('Für diese Route ist kein Verlauf vorhanden.'); return; }
+    // aufeinanderfolgende Abschnitte zu zusammenhängenden Segmenten verbinden
+    const segs = [];
+    for (const c of geom){
+      const pts = c.map(toLatLng);
+      const cur = segs[segs.length-1];
+      if (cur && cur[cur.length-1].distanceTo(pts[0]) < 2) cur.push(...pts.slice(1));
+      else segs.push(pts);
+    }
+    const f = v => v.toFixed(6);
+    const gpx = `<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="Wanderwege-Filter (Daten: Waymarked Trails / OpenStreetMap)" xmlns="http://www.topografix.com/GPX/1/1">
+  <metadata><name>${esc(r.name)}</name><copyright author="OpenStreetMap-Mitwirkende"><license>https://opendatacommons.org/licenses/odbl/</license></copyright>
+    <link href="${SITE}/#route?id=${r.id}"><text>Waymarked Trails</text></link></metadata>
+  <trk><name>${esc(r.name)}</name>
+${segs.map(s => '    <trkseg>\n' + s.map(p => `      <trkpt lat="${f(p.lat)}" lon="${f(p.lng)}"/>`).join('\n') + '\n    </trkseg>').join('\n')}
+  </trk>
+</gpx>`;
+    const blob = new Blob([gpx], {type:'application/gpx+xml'});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = (r.name || 'route-'+r.id).replace(/[\\/:*?"<>|]+/g,'_').trim() + '.gpx';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(a.href), 5000);
+    setStatus(`GPX für „${r.name}“ erstellt.`);
+  } catch(e){ setStatus('GPX konnte nicht erstellt werden: ' + e.message); }
+}
+
+$('list').addEventListener('click', e => {
+  const g = e.target.closest('a[data-gpx]');
+  if (g){ e.preventDefault(); downloadGPX(Number(g.dataset.gpx)); return; }
+  if (e.target.closest('a')) return;
+  const it = e.target.closest('.item'); if (it) showRoute(Number(it.dataset.id));
+});
+let redrawTimer = null;
+const refilter = () => {
+  page = 0; render(); $('list').scrollTop = 0;
+  if (showAllOn){ clearTimeout(redrawTimer); redrawTimer = setTimeout(drawAll, 500); }
+};
+$('showAll').onclick = () => {
+  showAllOn = !showAllOn;
+  $('showAll').classList.toggle('on', showAllOn);
+  $('showAll').textContent = showAllOn ? '✕ Karte leeren' : '🗺️ Alle auf Karte';
+  drawAll();
+};
+['diffChips','groupChips'].forEach(id => $(id).addEventListener('change', refilter));
+['lenMin','lenMax','hmMin','hmMax'].forEach(id => $(id).addEventListener('input', refilter));
+['round','sort','inclUnknown'].forEach(id => $(id).addEventListener('change', refilter));
+$('pager').addEventListener('click', e => {
+  const b = e.target.closest('button[data-p]'); if (!b || b.disabled) return;
+  page += Number(b.dataset.p); render(); $('list').scrollTop = 0;
+});
+
+function loadArea(append){
+  if (map.getZoom() < 9){ setStatus('Bitte weiter hineinzoomen (mind. Zoomstufe 9), sonst wird es zu viel.'); return; }
+  loadList(listByArea(mercBBox()), 'Kartenausschnitt', append);
+}
+$('loadArea').onclick = () => loadArea(false);
+$('addArea').onclick = () => loadArea(true);
+async function goPlace(){
+  const q = $('place').value.trim(); if (!q) return;
+  setStatus('Ort wird gesucht…');
+  try {
+    // Photon (Komoot) – Ortssuche auf OSM-Basis, funktioniert auch aus lokalen Dateien
+    const res = await fetch(`https://photon.komoot.io/api/?limit=1&lang=de&q=${encodeURIComponent(q)}`).then(r=>r.json());
+    const f = res.features && res.features[0];
+    if (!f){ setStatus('Ort nicht gefunden.'); return; }
+    const center = [f.geometry.coordinates[1], f.geometry.coordinates[0]];
+    placeLayer.clearLayers();
+    L.circleMarker(center, {radius:10, color:'#fff', weight:3, fillColor:'#e00000', fillOpacity:1})
+      .bindTooltip(f.properties.name || q, {permanent:true, direction:'top', offset:[0,-10]})
+      .addTo(placeLayer);
+    const ext = f.properties.extent; // [West, Nord, Ost, Süd]
+    if (ext) map.fitBounds([[ext[3],ext[0]],[ext[1],ext[2]]], {maxZoom:12});
+    else map.setView([f.geometry.coordinates[1], f.geometry.coordinates[0]], 12);
+    setStatus(`${f.properties.name || q} – jetzt „Wege im Ausschnitt laden“.`);
+  } catch(e){ setStatus('Ortssuche fehlgeschlagen.'); }
+}
+$('goPlace').onclick = goPlace;
+$('place').addEventListener('keydown', e => { if (e.key==='Enter') goPlace(); });
+function goName(){
+  const q = $('nameSearch').value.trim(); if (!q) return;
+  loadList(searchByName(q), `Suche „${q}“`);
+}
+$('goName').onclick = goName;
+$('nameSearch').addEventListener('keydown', e => { if (e.key==='Enter') goName(); });
+
+// Filter auf dem Handy ein-/ausklappen
+const mq = window.matchMedia('(max-width:800px)');
+if (mq.matches) $('controls').classList.add('collapsed');
+$('filterToggle').onclick = () => {
+  const c = $('controls').classList.toggle('collapsed');
+  $('filterArrow').textContent = c ? '▾' : '▴';
+};
+render();
+</script>
+</body>
+</html>
