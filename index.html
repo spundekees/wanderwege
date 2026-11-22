@@ -2,7 +2,8 @@
 <html lang="de">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#7a9a3c">
 <title>Wanderwege-Filter · Daten: Waymarked Trails / OpenStreetMap</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -56,6 +57,40 @@
   .surf{display:flex;height:7px;border-radius:4px;overflow:hidden;margin:3px 0 1px;width:100%}
   .pop-l{display:flex;flex-wrap:wrap;gap:4px 12px;margin-top:8px;padding-top:6px;border-top:1px solid var(--line)}
   .pop-l a{color:#c4007f}
+  /* Doppelschieberegler */
+  .dual{display:flex;align-items:center;gap:8px}
+  .dual-track{position:relative;flex:1;height:26px}
+  .dual-track::before{content:"";position:absolute;left:0;right:0;top:50%;height:4px;margin-top:-2px;border-radius:2px;background:var(--line)}
+  .dual-fill{position:absolute;top:50%;height:4px;margin-top:-2px;border-radius:2px;background:var(--green)}
+  .dual input[type=range]{position:absolute;left:0;top:0;width:100%;height:100%;margin:0;background:none;pointer-events:none;-webkit-appearance:none;appearance:none}
+  .dual input[type=range]::-webkit-slider-runnable-track{background:none;border:0;height:100%}
+  .dual input[type=range]::-moz-range-track{background:none;border:0}
+  .dual input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;pointer-events:auto;width:18px;height:18px;margin-top:4px;border-radius:50%;background:#fff;border:2px solid var(--green);box-shadow:0 1px 3px rgba(0,0,0,.25);cursor:grab}
+  .dual input[type=range]::-moz-range-thumb{pointer-events:auto;width:16px;height:16px;border-radius:50%;background:#fff;border:2px solid var(--green);box-shadow:0 1px 3px rgba(0,0,0,.25);cursor:grab}
+  .dual input[type=range]:focus-visible::-webkit-slider-thumb{outline:2px solid #ff00a8}
+  .dual-val{min-width:92px;text-align:right;font-size:12px;color:var(--ink);white-space:nowrap}
+  .pop-actions{display:flex;gap:8px;margin-top:10px}
+  .pop-actions button{flex:1;display:flex;align-items:center;justify-content:center;gap:6px}
+  .btn-osmand{background:#ff8800}
+  .btn-gpx{background:var(--green)}
+  /* Detail-Fenster (Handy) */
+  .sheet{position:fixed;inset:0;z-index:3000}
+  .sheet[hidden]{display:none}
+  .sheet-backdrop{position:absolute;inset:0;background:rgba(0,0,0,.35)}
+  .sheet-panel{position:absolute;left:0;right:0;bottom:0;max-height:78vh;max-height:78svh;overflow:auto;background:#fff;border-radius:16px 16px 0 0;
+    padding:6px 16px calc(16px + env(safe-area-inset-bottom));box-shadow:0 -6px 24px rgba(0,0,0,.25);animation:sheetUp .2s ease-out;-webkit-overflow-scrolling:touch}
+  @keyframes sheetUp{from{transform:translateY(100%)}to{transform:none}}
+  .sheet-grip{width:44px;height:5px;border-radius:3px;background:#ccc;margin:4px auto 8px}
+  .sheet-close{position:sticky;top:0;float:right;width:40px;height:40px;border-radius:50%;padding:0;font-size:18px;background:#f1f1f1;color:#333;margin:-2px -4px 0 8px;z-index:2}
+  .sheet .pop{font-size:15px}
+  .sheet .pop-h{font-size:17px;padding-right:8px}
+  .sheet .pop th,.sheet .pop td{padding:5px 0}
+  .sheet .pop th{padding-right:10px}
+  .sheet .pop-l{gap:10px 16px;font-size:14px}
+  .sheet .pop-actions button{padding:12px;font-size:15px}
+  .toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:4000;background:#222;color:#fff;
+    padding:10px 14px;border-radius:10px;font-size:14px;max-width:min(92vw,420px);box-shadow:0 4px 16px rgba(0,0,0,.3);line-height:1.35}
+  .toast[hidden]{display:none}
   .route-label-wrap{background:none;border:0;width:0;height:0}
   .route-label{position:absolute;left:0;top:0;transform:translate(-50%,-50%);cursor:pointer;background:rgba(255,255,255,.92);border:1.5px solid #ff00a8;color:#b0006f;font-weight:600;font-size:11px;
     padding:1px 6px;border-radius:10px;box-shadow:0 1px 3px rgba(0,0,0,.2);white-space:nowrap;max-width:220px;overflow:hidden;text-overflow:ellipsis}
@@ -101,11 +136,26 @@
     .links{gap:14px;font-size:13px}
     #pager{position:sticky;bottom:0}
     .leaflet-popup-content{margin:10px 12px}
+    .leaflet-control-zoom a{width:36px;height:36px;line-height:36px}
+    .route-label{font-size:12px;padding:2px 7px}
+    .dual-track{height:36px}
+    .dual input[type=range]::-webkit-slider-thumb{width:28px;height:28px;margin-top:4px}
+    .dual input[type=range]::-moz-range-thumb{width:24px;height:24px}
+    .dual-val{font-size:14px;min-width:100px}
     details[open] .hint{width:min(300px,85vw)}
   }
 </style>
 </head>
 <body>
+<div id="sheet" class="sheet" hidden>
+  <div class="sheet-backdrop" data-close></div>
+  <div class="sheet-panel" role="dialog" aria-modal="true" aria-label="Wegdetails">
+    <div class="sheet-grip" data-close></div>
+    <button class="sheet-close" type="button" data-close aria-label="Schließen">✕</button>
+    <div id="sheetContent"></div>
+  </div>
+</div>
+<div id="toast" class="toast" hidden></div>
 <header>
   <h1>🥾 Wanderwege-Filter</h1>
   <small>Daten: <a href="https://hiking.waymarkedtrails.org" target="_blank" style="color:#fff">Waymarked Trails</a> · © OpenStreetMap-Mitwirkende (ODbL)</small>
@@ -138,11 +188,21 @@
           <label class="chip" title="Schwierigkeit nicht ermittelbar"><input type="checkbox" value="unbekannt" checked><span class="dot" style="background:#999"></span>?</label>
         </div>
 
-        <span class="lbl">Länge (km)</span>
-        <div class="row"><input id="lenMin" type="number" min="0" step="1" placeholder="von"> – <input id="lenMax" type="number" min="0" step="1" placeholder="bis"></div>
+        <span class="lbl">Länge</span>
+        <div class="dual" data-min="0" data-max="40" data-step="1" data-unit="km" data-lo="lenMin" data-hi="lenMax">
+          <div class="dual-track"><div class="dual-fill"></div>
+            <input type="range" class="lo" aria-label="Länge von"><input type="range" class="hi" aria-label="Länge bis"></div>
+          <div class="dual-val"></div>
+          <input type="hidden" id="lenMin"><input type="hidden" id="lenMax">
+        </div>
 
         <span class="lbl">Höhenmeter ↑</span>
-        <div class="row"><input id="hmMin" type="number" min="0" step="50" placeholder="von"> – <input id="hmMax" type="number" min="0" step="50" placeholder="bis"></div>
+        <div class="dual" data-min="0" data-max="1500" data-step="50" data-unit="m" data-lo="hmMin" data-hi="hmMax">
+          <div class="dual-track"><div class="dual-fill"></div>
+            <input type="range" class="lo" aria-label="Höhenmeter von"><input type="range" class="hi" aria-label="Höhenmeter bis"></div>
+          <div class="dual-val"></div>
+          <input type="hidden" id="hmMin"><input type="hidden" id="hmMax">
+        </div>
 
         <span class="lbl">Wegform</span>
         <select id="round">
@@ -203,6 +263,13 @@ L.control.layers(baseLayers, {'Wanderwege (Waymarked Trails)': trailsOverlay}).a
 const allLayer = L.layerGroup().addTo(map);
 const routeLayer = L.layerGroup().addTo(map);
 const PINK = '#ff00a8';
+const IS_TOUCH = window.matchMedia('(hover: none)').matches;
+if (IS_TOUCH){
+  const _bindTooltip = L.Layer.prototype.bindTooltip;
+  L.Layer.prototype.bindTooltip = function(content, opts){
+    return (opts && opts.permanent) ? _bindTooltip.call(this, content, opts) : this;
+  };
+}
 // Beschriftungen der Wege bei „Alle auf Karte“ – erst ab Zoomstufe 12, sonst wird es unübersichtlich
 const labelLayer = L.layerGroup();
 const LABEL_MIN_ZOOM = 12;
@@ -398,7 +465,9 @@ async function loadList(listPromise, label, append=false, fit=true){
   if (token !== loadToken) return;
   saveCache(); setProgress(0);
   setStatus(`${label} – ${total} Wege geladen, insgesamt ${routes.size}.`);
+  updateSliderRanges();
   render();
+  clearTimeout(redrawTimer);   // evtl. durch die Regler ausgelöstes Neuzeichnen ersetzen
   if (showAllOn) drawAll(fit);
 }
 
@@ -477,7 +546,8 @@ function render(){
         </div>
         <div class="links">
           <a href="${SITE}/#route?id=${r.id}" target="_blank">Auf Waymarked Trails</a>
-          <a href="#" data-gpx="${r.id}">GPX herunterladen</a>
+          <a href="#" data-osmand="${r.id}">In OsmAnd öffnen</a>
+          <a href="#" data-gpx="${r.id}">GPX</a>
           <a href="https://www.openstreetmap.org/relation/${r.id}" target="_blank">OSM</a>
         </div>
       </div>
@@ -496,9 +566,9 @@ async function showRoute(id, fit=true){
   const lines = geom.map(c => c.map(toLatLng));
   L.polyline(lines, {color:'#fff', weight:10, opacity:.9}).addTo(routeLayer); // heller Rand
   const pl = L.polyline(lines, {color:PINK, weight:6, opacity:1}).bindTooltip(r.name, {sticky:true})
-    .on('click', e => L.popup({maxWidth:340, minWidth:280}).setLatLng(e.latlng).setContent(popupHtml(r)).openOn(map)).addTo(routeLayer);
+    .on('click', e => openPopup(r, e.latlng)).addTo(routeLayer);
   L.circleMarker(lines[0][0], {radius:7, color:'#fff', weight:2, fillColor:PINK, fillOpacity:1}).addTo(routeLayer).bindTooltip('Start: ' + r.name)
-    .on('click', e => L.popup({maxWidth:340, minWidth:280}).setLatLng(e.latlng).setContent(popupHtml(r)).openOn(map));
+    .on('click', e => openPopup(r, e.latlng));
   if (fit) map.fitBounds(pl.getBounds(), {padding:[30,30]});
 }
 
@@ -535,24 +605,59 @@ function popupHtml(r){
     <div class="pop-h"><img src="${API}/symbols/id/${encodeURIComponent(r.symbol||'')}.svg" alt="" onerror="this.style.display='none'">
       <div><b>${esc(r.name)}</b>${r.ref?`<div class="src">${esc(r.ref)}</div>`:''}</div></div>
     <table>${rows.join('')}</table>
+    <div class="pop-actions">
+      <button type="button" class="btn-osmand" data-osmand="${r.id}">📲 In OsmAnd öffnen</button>
+      <button type="button" class="btn-gpx" data-gpx="${r.id}">⬇️ GPX</button>
+    </div>
     <div class="pop-l">
-      <a href="#" data-gpx="${r.id}">GPX herunterladen</a>
       <a href="#" data-listid="${r.id}">In Liste zeigen</a>
       <a href="${SITE}/#route?id=${r.id}" target="_blank">Waymarked Trails</a>
       ${r.website ? `<a href="${esc(r.website)}" target="_blank">Website</a>` : ''}
     </div></div>`;
 }
+const isMobile = () => window.matchMedia('(max-width:800px)').matches;
 function openPopup(r, latlng){
-  showRoute(r.id, false);
-  L.popup({maxWidth:340, minWidth:280, autoPanPadding:[20,20]}).setLatLng(latlng).setContent(popupHtml(r)).openOn(map);
+  if (activeId !== r.id) showRoute(r.id, false);
+  else getGeom(r).catch(()=>{});      // Verlauf vorladen, damit „In OsmAnd öffnen“ sofort klappt
+  if (isMobile()) openSheet(r);
+  else L.popup({maxWidth:340, minWidth:280, autoPanPadding:[20,20]}).setLatLng(latlng).setContent(popupHtml(r)).openOn(map);
 }
-// Klicks auf Links im Fenster
-map.getContainer().addEventListener('click', e => {
-  const g = e.target.closest('.pop a[data-gpx]');
+// Bottom-Sheet fürs Handy
+let sheetHistory = false;
+function openSheet(r){
+  map.closePopup();
+  $('sheetContent').innerHTML = popupHtml(r);
+  $('sheet').hidden = false;
+  $('sheet').querySelector('.sheet-panel').scrollTop = 0;
+  document.body.style.overflow = 'hidden';
+  // Zurück-Taste des Handys schließt das Fenster
+  if (!sheetHistory){ try { history.pushState({sheet:1}, ''); sheetHistory = true; } catch(e){} }
+}
+function hideSheet(){
+  $('sheet').hidden = true;
+  document.body.style.overflow = '';
+}
+function closeSheet(){
+  if ($('sheet').hidden) return;
+  hideSheet();
+  if (sheetHistory){ sheetHistory = false; try { history.back(); } catch(e){} }
+}
+window.addEventListener('popstate', () => { if (sheetHistory){ sheetHistory = false; hideSheet(); } });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeSheet(); });
+$('sheet').addEventListener('click', e => { if (e.target.closest('[data-close]')) closeSheet(); });
+
+// Klicks auf Buttons/Links im Fenster (Popup und Bottom-Sheet)
+function handleDetailClick(e){
+  const o = e.target.closest('[data-osmand]');
+  if (o){ e.preventDefault(); openInOsmAnd(Number(o.dataset.osmand)); return; }
+  const g = e.target.closest('.pop [data-gpx]');
   if (g){ e.preventDefault(); downloadGPX(Number(g.dataset.gpx)); return; }
   const li = e.target.closest('.pop a[data-listid]');
-  if (li){ e.preventDefault(); scrollToItem(Number(li.dataset.listid)); }
-});
+  if (li){ e.preventDefault(); closeSheet(); map.closePopup(); scrollToItem(Number(li.dataset.listid));
+    const el = document.querySelector(`.item[data-id="${li.dataset.listid}"]`); if (el && isMobile()) el.scrollIntoView({block:'center', behavior:'smooth'}); }
+}
+map.getContainer().addEventListener('click', handleDetailClick);
+$('sheet').addEventListener('click', handleDetailClick);
 
 // ---------- Alle Ergebnisse auf der Karte ----------
 let showAllOn = true, allToken = 0;   // standardmäßig an: Karte zeigt immer die gefilterten Wege
@@ -627,22 +732,17 @@ async function getGeom(r){
   }
   return r.geom || [];
 }
-async function downloadGPX(id){
-  const r = routes.get(id); if (!r) return;
-  setStatus('GPX wird erstellt…');
-  try {
-    const geom = await getGeom(r);
-    if (!geom.length){ setStatus('Für diese Route ist kein Verlauf vorhanden.'); return; }
-    // aufeinanderfolgende Abschnitte zu zusammenhängenden Segmenten verbinden
-    const segs = [];
-    for (const c of geom){
-      const pts = c.map(toLatLng);
-      const cur = segs[segs.length-1];
-      if (cur && cur[cur.length-1].distanceTo(pts[0]) < 2) cur.push(...pts.slice(1));
-      else segs.push(pts);
-    }
-    const f = v => v.toFixed(6);
-    const gpx = `<?xml version="1.0" encoding="UTF-8"?>
+function buildGPX(r){
+  // aufeinanderfolgende Abschnitte zu zusammenhängenden Segmenten verbinden
+  const segs = [];
+  for (const c of (r.geom || [])){
+    const pts = c.map(toLatLng);
+    const cur = segs[segs.length-1];
+    if (cur && cur[cur.length-1].distanceTo(pts[0]) < 2) cur.push(...pts.slice(1));
+    else segs.push(pts);
+  }
+  const f = v => v.toFixed(6);
+  const gpx = `<?xml version="1.0" encoding="UTF-8"?>
 <gpx version="1.1" creator="Wanderwege-Filter (Daten: Waymarked Trails / OpenStreetMap)" xmlns="http://www.topografix.com/GPX/1/1">
   <metadata><name>${esc(r.name)}</name><copyright author="OpenStreetMap-Mitwirkende"><license>https://opendatacommons.org/licenses/odbl/</license></copyright>
     <link href="${SITE}/#route?id=${r.id}"><text>Waymarked Trails</text></link></metadata>
@@ -650,17 +750,61 @@ async function downloadGPX(id){
 ${segs.map(s => '    <trkseg>\n' + s.map(p => `      <trkpt lat="${f(p.lat)}" lon="${f(p.lng)}"/>`).join('\n') + '\n    </trkseg>').join('\n')}
   </trk>
 </gpx>`;
-    const blob = new Blob([gpx], {type:'application/gpx+xml'});
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = (r.name || 'route-'+r.id).replace(/[\\/:*?"<>|]+/g,'_').trim() + '.gpx';
-    document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(()=>URL.revokeObjectURL(a.href), 5000);
-    setStatus(`GPX für „${r.name}“ erstellt.`);
-  } catch(e){ setStatus('GPX konnte nicht erstellt werden: ' + e.message); }
+  const filename = (r.name || 'route-'+r.id).replace(/[\\/:*?"<>|]+/g,'_').trim() + '.gpx';
+  return {gpx, filename};
+}
+function saveGPX(r){
+  const {gpx, filename} = buildGPX(r);
+  const blob = new Blob([gpx], {type:'application/gpx+xml'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(a.href), 10000);
+  return filename;
+}
+async function downloadGPX(id){
+  const r = routes.get(id); if (!r) return;
+  try {
+    const geom = await getGeom(r);
+    if (!geom.length){ toast('Für diese Route ist kein Verlauf vorhanden.'); return; }
+    const fn = saveGPX(r);
+    toast(`GPX-Datei „${fn}“ wird heruntergeladen.`);
+  } catch(e){ toast('GPX konnte nicht erstellt werden: ' + e.message); }
+}
+// Weg direkt an OsmAnd übergeben: über das Teilen-Menü des Handys (iPhone/Android),
+// sonst als GPX-Datei herunterladen und mit OsmAnd öffnen
+async function openInOsmAnd(id){
+  const r = routes.get(id); if (!r) return;
+  if (!r.geom){
+    toast('Verlauf wird geladen…');
+    try { await getGeom(r); } catch(e){}
+    if (!r.geom || !r.geom.length){ toast('Für diese Route ist kein Verlauf vorhanden.'); return; }
+  }
+  const {gpx, filename} = buildGPX(r);
+  let file = null;
+  try { file = new File([gpx], filename, {type:'application/gpx+xml'}); } catch(e){}
+  if (file && navigator.canShare && navigator.canShare({files:[file]})){
+    try {
+      await navigator.share({files:[file], title:r.name});
+      return;                                    // im Teilen-Menü „OsmAnd“ wählen
+    } catch(e){
+      if (e && e.name === 'AbortError') return;  // Nutzer hat abgebrochen
+      // z. B. fehlende Berechtigung nach dem Nachladen → unten herunterladen
+    }
+  }
+  saveGPX(r);
+  toast('GPX-Datei wird heruntergeladen. Öffne sie danach (z. B. über die Download-Meldung oder die Dateien-App) und wähle „OsmAnd“ – der Weg wird dann als Track importiert.', 9000);
+}
+let toastTimer = null;
+function toast(msg, ms = 4000){
+  const t = $('toast'); t.textContent = msg; t.hidden = false;
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.hidden = true, ms);
 }
 
 $('list').addEventListener('click', e => {
+  const o = e.target.closest('a[data-osmand]');
+  if (o){ e.preventDefault(); openInOsmAnd(Number(o.dataset.osmand)); return; }
   const g = e.target.closest('a[data-gpx]');
   if (g){ e.preventDefault(); downloadGPX(Number(g.dataset.gpx)); return; }
   if (e.target.closest('a')) return;
@@ -683,6 +827,61 @@ $('showAll').onclick = () => { showAllOn = !showAllOn; setShowAllButton(); drawA
 setShowAllButton();
 ['diffChips','groupChips'].forEach(id => $(id).addEventListener('change', refilter));
 ['lenMin','lenMax','hmMin','hmMax'].forEach(id => $(id).addEventListener('input', refilter));
+// Doppelschieberegler: ganz links/rechts = keine Grenze; schreiben in die versteckten Felder lenMin/lenMax/hmMin/hmMax
+const duals = {};
+document.querySelectorAll('.dual').forEach(d => {
+  let min = +d.dataset.min, max = +d.dataset.max, step = +d.dataset.step;
+  const unit = d.dataset.unit;
+  const lo = d.querySelector('.lo'), hi = d.querySelector('.hi'), fill = d.querySelector('.dual-fill'), out = d.querySelector('.dual-val');
+  const loField = $(d.dataset.lo), hiField = $(d.dataset.hi);
+  const fmt = v => v.toLocaleString('de-DE', {maximumFractionDigits:1});
+  function applyAttrs(){ [lo, hi].forEach(i => { i.min = min; i.max = max; i.step = step; }); }
+  applyAttrs(); lo.value = min; hi.value = max;
+  function update(e){
+    let a = +lo.value, b = +hi.value;
+    if (a > b){ if (e && e.target === lo) lo.value = a = b; else hi.value = b = a; }
+    const span = (max - min) || 1;
+    fill.style.left = ((a-min)/span*100) + '%';
+    fill.style.right = (100 - (b-min)/span*100) + '%';
+    // der zuletzt bewegte Regler liegt oben (wichtig, wenn beide am selben Ende stehen)
+    lo.style.zIndex = (a >= max - step) ? 3 : 1;
+    out.textContent = `${fmt(a)}–${fmt(b)} ${unit}`;
+    out.title = (a <= min && b >= max) ? 'kein Filter aktiv' : '';
+    // Regler am Rand = keine Grenze (so werden auch später geladene längere/kürzere Wege nicht versehentlich ausgefiltert)
+    const nl = a <= min ? '' : String(a), nh = b >= max ? '' : String(b);
+    if (loField.value !== nl || hiField.value !== nh){
+      loField.value = nl; hiField.value = nh;
+      loField.dispatchEvent(new Event('input'));
+    }
+  }
+  // Bereich an die geladenen Wege anpassen; Einstellungen bleiben erhalten, Regler am Rand bleiben am Rand
+  function setRange(nMin, nMax, nStep){
+    const wasMin = +lo.value <= min, wasMax = +hi.value >= max;
+    const a = +lo.value, b = +hi.value;
+    min = nMin; max = Math.max(nMax, nMin + nStep); step = nStep;
+    applyAttrs();
+    lo.value = wasMin ? min : Math.min(Math.max(a, min), max);
+    hi.value = wasMax ? max : Math.min(Math.max(b, min), max);
+    update();
+  }
+  lo.addEventListener('input', update); hi.addEventListener('input', update);
+  update();
+  duals[d.dataset.lo] = {setRange};
+});
+function niceStep(range, steps){ return steps.find(s => range / s <= 60) || steps[steps.length-1]; }
+function updateSliderRanges(){
+  const all = [...routes.values()];
+  const lens = all.map(r => r.length).filter(v => v != null).map(v => v/1000);
+  const hms  = all.map(r => r.up).filter(v => v != null);
+  if (lens.length){
+    const st = niceStep(Math.max(...lens) - Math.min(...lens), [0.5, 1, 2, 5, 10]);
+    duals.lenMin.setRange(Math.floor(Math.min(...lens)/st)*st, Math.ceil(Math.max(...lens)/st)*st, st);
+  }
+  if (hms.length){
+    const st = niceStep(Math.max(...hms) - Math.min(...hms), [10, 25, 50, 100, 250]);
+    duals.hmMin.setRange(Math.floor(Math.min(...hms)/st)*st, Math.ceil(Math.max(...hms)/st)*st, st);
+  }
+}
 ['round','sort','inclUnknown'].forEach(id => $(id).addEventListener('change', refilter));
 $('pager').addEventListener('click', e => {
   const b = e.target.closest('button[data-p]'); if (!b || b.disabled) return;

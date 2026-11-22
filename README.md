@@ -14,8 +14,7 @@ Die Seite läuft im Browser am Computer und auf dem Handy. Man braucht weder Ins
 - **Mehrere Gebiete sammeln:** Mit „+ hinzufügen“ kommen die Wege weiterer Kartenausschnitte dazu, ohne dass die bisherigen verloren gehen.
 - **Filter:**
   - Schwierigkeit (leicht, mittel, schwer, unbekannt)
-  - Länge in km (von–bis)
-  - Höhenmeter im Aufstieg (von–bis)
+  - Länge in km und Höhenmeter im Aufstieg, jeweils per Doppelschieberegler. Der Bereich passt sich automatisch an die geladenen Wege an, von der kürzesten bis zur längsten Route bzw. vom geringsten bis zum größten Anstieg. Ein Regler am Rand bedeutet „keine Grenze“.
   - Wegform (Rundweg oder Streckenwanderung)
   - Kategorie (lokal, regional, national, international)
 - **Sortierung** nach Name, Länge, Höhenmetern oder Schwierigkeit.
@@ -25,9 +24,10 @@ Die Seite läuft im Browser am Computer und auf dem Handy. Man braucht weder Ins
   - geschätzter Gehzeit
   - Untergrund (befestigt oder naturbelassen)
   - Markierung, Betreuer und Links
+- **In OsmAnd öffnen:** Übergibt den Weg als GPX-Track über das Teilen-Menü des Handys an OsmAnd. Wo das Teilen nicht geht, wird die GPX-Datei heruntergeladen und lässt sich dann mit OsmAnd öffnen.
 - **GPX-Download:** Die GPX-Datei wird direkt im Browser aus dem Wegverlauf erzeugt, zum Beispiel für Komoot, Outdooractive oder Garmin.
 - **Kartenstile:** OpenTopoMap (Standard), Esri Topografisch und Esri Straßenkarte, darüber die Wanderweg-Markierungen von Waymarked Trails.
-- **Handy-Ansicht:** Oben die Karte, darunter Suche und Ergebnisliste. Die Filter lassen sich einklappen.
+- **Handy-Ansicht:** Oben die Karte, darunter Suche und Ergebnisliste. Die Filter lassen sich einklappen. Die Details öffnen sich als Fenster von unten, das man über ✕, durch Tippen daneben oder mit der Zurück-Taste schließt.
 
 ## Bedienung in Kürze
 
