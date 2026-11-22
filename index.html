@@ -73,6 +73,9 @@
   .pop-actions button{flex:1;display:flex;align-items:center;justify-content:center;gap:6px}
   .btn-osmand{background:#ff8800}
   .btn-gpx{background:var(--green)}
+  .ios-hint{margin-top:8px;font-size:13px;color:var(--muted);text-align:left}
+  .ios-hint summary{color:#c4007f;cursor:pointer}
+  .ios-hint ol{margin:6px 0 0;padding-left:20px;line-height:1.45}
   /* Detail-Fenster (Handy) */
   .sheet{position:fixed;inset:0;z-index:3000}
   .sheet[hidden]{display:none}
@@ -271,6 +274,7 @@ const allLayer = L.layerGroup().addTo(map);
 const routeLayer = L.layerGroup().addTo(map);
 const PINK = '#ff00a8';
 const IS_TOUCH = window.matchMedia('(hover: none)').matches;
+const IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 if (IS_TOUCH){
   const _bindTooltip = L.Layer.prototype.bindTooltip;
   L.Layer.prototype.bindTooltip = function(content, opts){
@@ -658,6 +662,10 @@ function popupHtml(r){
       <button type="button" class="btn-osmand" data-osmand="${r.id}">📲 In OsmAnd öffnen</button>
       <button type="button" class="btn-gpx" data-gpx="${r.id}">⬇️ GPX</button>
     </div>
+    ${IS_IOS ? `<details class="ios-hint"><summary>OsmAnd fehlt im Teilen-Menü?</summary>
+      <ol><li>Im Teilen-Menü <b>„In Dateien sichern“</b> wählen und speichern.</li>
+      <li>Die App <b>Dateien</b> öffnen, die GPX-Datei lange drücken → <b>Teilen</b> → <b>OsmAnd</b>.</li>
+      <li>Oder in OsmAnd: <b>Menü → Meine Orte → Tracks → Importieren</b> und die Datei wählen.</li></ol></details>` : ''}
     <div class="pop-l">
       <a href="#" data-listid="${r.id}">In Liste zeigen</a>
       <a href="${SITE}/#route?id=${r.id}" target="_blank">Waymarked Trails</a>
@@ -827,7 +835,8 @@ async function downloadGPX(id){
 function gpxShareFile(r){
   const {gpx, filename} = buildGPX(r);
   if (!navigator.canShare) return null;
-  for (const type of ['application/gpx+xml', 'application/octet-stream', '']){
+  const types = IS_IOS ? ['', 'application/gpx+xml', 'application/octet-stream'] : ['application/gpx+xml', '', 'application/octet-stream'];
+  for (const type of types){
     try {
       const f = new File([gpx], filename, type ? {type} : {});
       if (navigator.canShare({files:[f]})) return f;
