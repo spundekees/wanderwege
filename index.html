@@ -56,9 +56,10 @@
   .surf{display:flex;height:7px;border-radius:4px;overflow:hidden;margin:3px 0 1px;width:100%}
   .pop-l{display:flex;flex-wrap:wrap;gap:4px 12px;margin-top:8px;padding-top:6px;border-top:1px solid var(--line)}
   .pop-l a{color:#c4007f}
-  .leaflet-tooltip.route-label{background:rgba(255,255,255,.92);border:1.5px solid #ff00a8;color:#b0006f;font-weight:600;font-size:11px;
+  .route-label-wrap{background:none;border:0;width:0;height:0}
+  .route-label{position:absolute;left:0;top:0;transform:translate(-50%,-50%);cursor:pointer;background:rgba(255,255,255,.92);border:1.5px solid #ff00a8;color:#b0006f;font-weight:600;font-size:11px;
     padding:1px 6px;border-radius:10px;box-shadow:0 1px 3px rgba(0,0,0,.2);white-space:nowrap;max-width:220px;overflow:hidden;text-overflow:ellipsis}
-  .leaflet-tooltip.route-label::before{display:none}
+  .route-label:hover{background:#ff00a8;color:#fff}
   .areaCount{display:inline-block;min-width:22px;padding:0 6px;margin-left:4px;border-radius:9px;background:rgba(255,255,255,.25);font-size:12px;font-weight:600}
   .areaCount:empty{display:none}
   #progress{height:3px;background:var(--green);width:0;transition:width .2s}
@@ -572,11 +573,13 @@ async function drawAll(){
       if (token !== allToken) return;
       if (geom.length){
         const lines = geom.map(c => c.map(toLatLng));
-        const pl = L.polyline(lines, {color:PINK, weight:3.5, opacity:.75})
+        const pl = L.polyline(lines, {color:PINK, weight:3.5, opacity:.75, interactive:false}).addTo(allLayer);
+        // unsichtbare, breite Klickfläche – damit man den Weg auch auf dem Handy gut trifft
+        L.polyline(lines, {color:'#000', weight:18, opacity:0})
           .bindTooltip(r.name, {sticky:true})
           .on('click', e => openPopup(r, e.latlng))
-          .on('mouseover', e => e.target.setStyle({weight:6, opacity:1}))
-          .on('mouseout',  e => e.target.setStyle({weight:3.5, opacity:.75}))
+          .on('mouseover', () => pl.setStyle({weight:6, opacity:1}))
+          .on('mouseout',  () => pl.setStyle({weight:3.5, opacity:.75}))
           .addTo(allLayer);
         L.circleMarker(lines[0][0], {radius:4, color:'#fff', weight:1.5, fillColor:PINK, fillOpacity:1})
           .bindTooltip('Start: ' + r.name).on('click', e => openPopup(r, e.latlng))
@@ -585,9 +588,11 @@ async function drawAll(){
         // Beschriftung in der Mitte des Weges
         const pts = lines.flat();
         const mid = pts[Math.floor(pts.length / 2)];
-        L.tooltip({permanent:true, direction:'center', className:'route-label', interactive:true})
-          .setLatLng(mid).setContent(esc(r.ref && r.ref.length <= 6 ? r.ref + ' · ' + r.name : r.name))
-          .addTo(labelLayer);
+        const labelText = esc(r.ref && r.ref.length <= 6 ? r.ref + ' · ' + r.name : r.name);
+        L.marker(mid, {
+          icon: L.divIcon({className:'route-label-wrap', iconSize:null, html:`<span class="route-label" title="${labelText}">${labelText}</span>`}),
+          keyboard:false, riseOnHover:true
+        }).on('click', e => openPopup(r, e.latlng)).addTo(labelLayer);
       }
       done++;
       setStatus(`Karte: ${done}/${list.length} Wege gezeichnet…`);
