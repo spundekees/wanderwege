@@ -175,7 +175,7 @@
       </div>
     </div>
     <div id="progress"></div>
-    <div id="status"><span id="statusText">Ort suchen oder Karte verschieben, dann „Wege im Ausschnitt laden“.</span><span class="statusRight"><span id="count"></span><button id="showAll" class="secondary small" title="Alle gefilterten Wege auf der Karte anzeigen">🗺️ Alle auf Karte</button></span></div>
+    <div id="status"><span id="statusText">Ort suchen – die Wege in der Umgebung werden automatisch geladen.</span><span class="statusRight"><span id="count"></span><button id="showAll" class="secondary small" title="Alle gefilterten Wege auf der Karte anzeigen">🗺️ Alle auf Karte</button></span></div>
     <div id="list"></div>
     <div id="pager"></div>
   </aside>
@@ -368,7 +368,7 @@ async function loadDetails(base){
 }
 
 // ---------- Laden ----------
-async function loadList(listPromise, label, append=false){
+async function loadList(listPromise, label, append=false, fit=true){
   const token = ++loadToken;
   if (!append){ routes = new Map(); activeId = null; routeLayer.clearLayers(); allLayer.clearLayers(); labelLayer.clearLayers(); }
   page = 0; render();
@@ -399,7 +399,7 @@ async function loadList(listPromise, label, append=false){
   saveCache(); setProgress(0);
   setStatus(`${label} – ${total} Wege geladen, insgesamt ${routes.size}.`);
   render();
-  if (showAllOn) drawAll();
+  if (showAllOn) drawAll(fit);
 }
 
 // Die Namenssuche von Waymarked Trails liefert je nach "limit" unterschiedlich viele Treffer
@@ -555,8 +555,8 @@ map.getContainer().addEventListener('click', e => {
 });
 
 // ---------- Alle Ergebnisse auf der Karte ----------
-let showAllOn = false, allToken = 0;
-async function drawAll(){
+let showAllOn = true, allToken = 0;   // standardmäßig an: Karte zeigt immer die gefilterten Wege
+async function drawAll(fit = true){
   const token = ++allToken;
   allLayer.clearLayers();
   labelLayer.clearLayers();
@@ -601,9 +601,9 @@ async function drawAll(){
   await Promise.all(Array.from({length:5}, worker));
   if (token !== allToken) return;
   setStatus(`${list.length} Wege auf der Karte – anklicken zum Auswählen.`);
-  if (bounds.isValid()) map.fitBounds(bounds, {padding:[30,30]});
+  if (fit && bounds.isValid()) map.fitBounds(bounds, {padding:[30,30]});
   updateLabelVisibility();
-  const targetZoom = bounds.isValid() ? Math.min(map.getBoundsZoom(bounds, false, L.point(60,60)), map.getMaxZoom()) : map.getZoom();
+  const targetZoom = (fit && bounds.isValid()) ? Math.min(map.getBoundsZoom(bounds, false, L.point(60,60)), map.getMaxZoom()) : map.getZoom();
   if (targetZoom < LABEL_MIN_ZOOM) setStatus(`${list.length} Wege auf der Karte – zum Anzeigen der Namen weiter hineinzoomen.`);
 }
 function scrollToItem(id){
@@ -669,14 +669,18 @@ $('list').addEventListener('click', e => {
 let redrawTimer = null;
 const refilter = () => {
   page = 0; render(); $('list').scrollTop = 0;
-  if (showAllOn){ clearTimeout(redrawTimer); redrawTimer = setTimeout(drawAll, 500); }
+  // ausgewählte Route ausblenden, wenn sie nicht mehr zu den Filtern passt
+  if (activeId != null && !filtered().some(r => r.id === activeId)){ activeId = null; routeLayer.clearLayers(); map.closePopup(); }
+  // Karte ohne Herumspringen an die neuen Filter anpassen
+  if (showAllOn){ clearTimeout(redrawTimer); redrawTimer = setTimeout(() => drawAll(false), 400); }
 };
-$('showAll').onclick = () => {
-  showAllOn = !showAllOn;
+function setShowAllButton(){
   $('showAll').classList.toggle('on', showAllOn);
-  $('showAll').textContent = showAllOn ? '✕ Karte leeren' : '🗺️ Alle auf Karte';
-  drawAll();
-};
+  $('showAll').textContent = showAllOn ? '✕ Wege ausblenden' : '🗺️ Alle auf Karte';
+  $('showAll').title = showAllOn ? 'Gefilterte Wege auf der Karte ausblenden' : 'Alle gefilterten Wege auf der Karte anzeigen';
+}
+$('showAll').onclick = () => { showAllOn = !showAllOn; setShowAllButton(); drawAll(); };
+setShowAllButton();
 ['diffChips','groupChips'].forEach(id => $(id).addEventListener('change', refilter));
 ['lenMin','lenMax','hmMin','hmMax'].forEach(id => $(id).addEventListener('input', refilter));
 ['round','sort','inclUnknown'].forEach(id => $(id).addEventListener('change', refilter));
@@ -707,6 +711,35 @@ function loadArea(append){
 }
 $('loadArea').onclick = () => loadArea(false);
 $('addArea').onclick = () => loadArea(true);
+// Zoomstufe finden, bei der um den Ort herum höchstens `max` Wege in der Ansicht liegen
+const MAX_ROUTES_AFTER_SEARCH = 50;
+function mercBBoxFor(center, z){
+  const size = map.getSize(), c = map.project(center, z);
+  const sw = map.unproject(c.add(L.point(-size.x/2,  size.y/2)), z);
+  const ne = map.unproject(c.add(L.point( size.x/2, -size.y/2)), z);
+  const a = SM.project(sw), b = SM.project(ne);
+  return [a.x, a.y, b.x, b.y];
+}
+async function countRoutesAt(center, z){
+  const d = await getJSON(`${API}/list/by_area?bbox=${mercBBoxFor(center, z).map(n=>n.toFixed(1)).join(',')}&limit=100`);
+  return d && d.results ? d.results.length : 0;
+}
+async function zoomForMaxRoutes(center, max){
+  const MIN_Z = 9, MAX_Z = 16;
+  let z = 12, n = await countRoutesAt(center, z);
+  if (n > max){
+    // zu viele: hineinzoomen, bis es passt
+    while (n > max && z < MAX_Z){ z++; n = await countRoutesAt(center, z); }
+  } else {
+    // passt schon: so weit herauszoomen, wie es noch passt
+    while (z > MIN_Z){
+      const m = await countRoutesAt(center, z - 1);
+      if (m > max) break;
+      z--; n = m;
+    }
+  }
+  return z;
+}
 async function goPlace(){
   const q = $('place').value.trim(); if (!q) return;
   setStatus('Ort wird gesucht…');
@@ -720,10 +753,11 @@ async function goPlace(){
     L.circleMarker(center, {radius:10, color:'#fff', weight:3, fillColor:'#e00000', fillOpacity:1})
       .bindTooltip(f.properties.name || q, {permanent:true, direction:'top', offset:[0,-10]})
       .addTo(placeLayer);
-    const ext = f.properties.extent; // [West, Nord, Ost, Süd]
-    if (ext) map.fitBounds([[ext[3],ext[0]],[ext[1],ext[2]]], {maxZoom:12});
-    else map.setView([f.geometry.coordinates[1], f.geometry.coordinates[0]], 12);
-    setStatus(`${f.properties.name || q} – jetzt „Wege im Ausschnitt laden“.`);
+    const name = f.properties.name || q;
+    setStatus(`${name} gefunden – passende Zoomstufe wird gesucht…`);
+    const z = await zoomForMaxRoutes(center, MAX_ROUTES_AFTER_SEARCH);
+    map.setView(center, z, {animate:false});
+    loadList(listByArea(mercBBox()), name, false, false);   // Zoom beibehalten, nicht auf lange Fernwege herauszoomen
   } catch(e){ setStatus('Ortssuche fehlgeschlagen.'); }
 }
 $('goPlace').onclick = goPlace;
