@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GPX-Teilen-Test</title>
+<style>
+  body{font-family:system-ui,-apple-system,sans-serif;margin:0;padding:16px;background:#fbfcf8;color:#1f2a1a;font-size:16px}
+  h1{font-size:20px;margin:0 0 8px}
+  p{margin:0 0 14px;color:#6b7563}
+  button{display:block;width:100%;margin:0 0 10px;padding:14px;border:0;border-radius:10px;background:#5a7d2a;color:#fff;font:inherit;text-align:left}
+  button small{display:block;opacity:.85;font-size:13px}
+  button.alt{background:#ff8800}
+  #log{white-space:pre-wrap;font-size:13px;background:#fff;border:1px solid #d8dfcf;border-radius:8px;padding:10px;margin-top:6px}
+</style>
+</head>
+<body>
+<h1>GPX-Teilen-Test</h1>
+<p>Bitte jeden Knopf einmal antippen und notieren, bei welchem <b>OsmAnd</b> im Teilen-Menü erscheint (auch unter „Mehr“ schauen). Danach jeweils abbrechen.</p>
+<div id="buttons"></div>
+<div id="log"></div>
+<script>
+// Kleiner Beispiel-Track (Rundweg), damit der Test ohne Datenabruf auskommt
+const pts = [[50.0000,8.0000],[50.0040,8.0060],[50.0080,8.0010],[50.0030,7.9960],[50.0000,8.0000]];
+const gpx = `<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="Wanderwege-Filter Test" xmlns="http://www.topografix.com/GPX/1/1">
+  <metadata><name>Testweg</name></metadata>
+  <trk><name>Testweg</name><trkseg>
+${pts.map(p => `    <trkpt lat="${p[0]}" lon="${p[1]}"/>`).join('\n')}
+  </trkseg></trk>
+</gpx>`;
+const log = m => { document.getElementById('log').textContent += m + '\n'; };
+log('Browser: ' + navigator.userAgent);
+log('Web Share mit Dateien: ' + (navigator.canShare ? 'ja' : 'nein'));
+
+const variants = [
+  {nr:1, label:'Teilen, ohne Dateityp', type:null, name:'Testweg.gpx'},
+  {nr:2, label:'Teilen, application/gpx+xml', type:'application/gpx+xml', name:'Testweg.gpx'},
+  {nr:3, label:'Teilen, application/octet-stream', type:'application/octet-stream', name:'Testweg.gpx'},
+  {nr:4, label:'Teilen, application/xml', type:'application/xml', name:'Testweg.gpx'},
+  {nr:5, label:'Teilen, text/xml', type:'text/xml', name:'Testweg.gpx'},
+  {nr:6, label:'Teilen, text/plain', type:'text/plain', name:'Testweg.gpx'},
+];
+const box = document.getElementById('buttons');
+for (const v of variants){
+  const b = document.createElement('button');
+  const f = new File([gpx], v.name, v.type ? {type:v.type} : {});
+  let ok = false; try { ok = !!(navigator.canShare && navigator.canShare({files:[f]})); } catch(e){}
+  b.innerHTML = `${v.nr}. ${v.label}<small>${ok ? 'vom Browser erlaubt' : 'vom Browser NICHT erlaubt'}</small>`;
+  b.onclick = async () => {
+    try { await navigator.share({files:[f]}); log(`${v.nr}: geteilt`); }
+    catch(e){ log(`${v.nr}: ${e.name} – ${e.message}`); }
+  };
+  box.appendChild(b);
+}
+// Variante 7: echter Download (danach „Öffnen in …“ bzw. Downloads → Teilen)
+const d = document.createElement('button');
+d.className = 'alt';
+d.innerHTML = '7. Als Datei herunterladen<small>danach die Datei öffnen bzw. „Öffnen in …“ antippen</small>';
+d.onclick = () => {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([gpx], {type:'application/gpx+xml'}));
+  a.download = 'Testweg.gpx';
+  document.body.appendChild(a); a.click(); a.remove();
+  log('7: Download angestoßen');
+};
+box.appendChild(d);
+</script>
+</body>
