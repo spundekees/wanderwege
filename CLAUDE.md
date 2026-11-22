@@ -34,7 +34,7 @@ Live: https://spundekees.github.io/wanderwege/ (GitHub Pages, Branch `main`, Ord
 - Zwischenspeicher der Wegdetails in `localStorage` (`wmt-filter-cache-v2`, ohne Geometrie). Bei neuen Feldern Schlüssel hochzählen.
 
 ## Offene Punkte
-- **OsmAnd auf dem iPhone:** Teilen per Web Share API (`navigator.share({files})`). OsmAnd erschien zuletzt nicht im Teilen-Menü. Versuch: auf iOS Datei ohne MIME-Typ teilen (`gpxShareFile`). Umweg „In Dateien sichern“ → Dateien-App → OsmAnd ist als Hinweis eingebaut. Noch nicht bestätigt, ob es jetzt klappt.
+- **OsmAnd auf dem iPhone: gelöst.** Test mit `gpx-test.html` (Chrome auf iOS): Per Web Share (`navigator.share({files})`) erscheint OsmAnd bei **keinem** Dateityp (ohne, gpx+xml, octet-stream, xml, text/xml, text/plain) im Teilen-Menü. Bei einer **heruntergeladenen** Datei über „Öffnen in …“ erscheint OsmAnd. Deshalb auf iOS immer Download (`gpxShareFile` liefert dort `null`). Als Home-Bildschirm-App sind keine Downloads möglich → Hinweis, die Seite im Browser zu öffnen.
 - Android/Chrome erlaubt das Teilen von `.gpx` per Web Share vermutlich nicht → Download als Rückfall.
 
 ## Arbeitsweise
