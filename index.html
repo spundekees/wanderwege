@@ -56,6 +56,9 @@
   .surf{display:flex;height:7px;border-radius:4px;overflow:hidden;margin:3px 0 1px;width:100%}
   .pop-l{display:flex;flex-wrap:wrap;gap:4px 12px;margin-top:8px;padding-top:6px;border-top:1px solid var(--line)}
   .pop-l a{color:#c4007f}
+  .leaflet-tooltip.route-label{background:rgba(255,255,255,.92);border:1.5px solid #ff00a8;color:#b0006f;font-weight:600;font-size:11px;
+    padding:1px 6px;border-radius:10px;box-shadow:0 1px 3px rgba(0,0,0,.2);white-space:nowrap;max-width:220px;overflow:hidden;text-overflow:ellipsis}
+  .leaflet-tooltip.route-label::before{display:none}
   #progress{height:3px;background:var(--green);width:0;transition:width .2s}
   #list{overflow:auto;flex:1;min-height:0}
   .item{padding:10px 14px;border-bottom:1px solid var(--line);display:grid;grid-template-columns:36px 1fr;gap:10px;cursor:pointer}
@@ -141,7 +144,7 @@
         <span class="lbl">Wegform</span>
         <select id="round">
           <option value="all">alle</option>
-          <option value="yes">nur Rundwege</option>
+          <option value="yes" selected>nur Rundwege</option>
           <option value="no">nur Streckenwanderungen</option>
         </select>
 
@@ -156,7 +159,7 @@
         <span class="lbl">Sortierung</span>
         <select id="sort">
           <option value="name">Name</option>
-          <option value="len">Länge</option>
+          <option value="len" selected>Länge</option>
           <option value="hm">Höhenmeter</option>
           <option value="diff">Schwierigkeit</option>
         </select>
@@ -187,16 +190,25 @@ const SAC_RANK = {hiking:1, mountain_hiking:2, demanding_mountain_hiking:3, alpi
 const map = L.map('map').setView([50.0, 8.27], 11);
 // Hinweis: tile.openstreetmap.org blockiert lokal geöffnete Dateien (kein Referer) → andere Kartenanbieter
 const baseLayers = {
+  'OpenTopoMap': L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {maxNativeZoom:17, maxZoom:19, subdomains:'abc', attribution:'© OpenStreetMap-Mitwirkende, SRTM | © OpenTopoMap (CC-BY-SA)'}),
   'Topografisch (Esri)': L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}', {maxZoom:19, attribution:'Karte © Esri und Partner'}),
-  'Straßenkarte (Esri)': L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {maxZoom:19, attribution:'Karte © Esri und Partner'}),
-  'OpenTopoMap': L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {maxZoom:17, subdomains:'abc', attribution:'© OpenStreetMap-Mitwirkende, SRTM | © OpenTopoMap (CC-BY-SA)'})
+  'Straßenkarte (Esri)': L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {maxZoom:19, attribution:'Karte © Esri und Partner'})
 };
-baseLayers['Topografisch (Esri)'].addTo(map);
+baseLayers['OpenTopoMap'].addTo(map);
 const trailsOverlay = L.tileLayer('https://tile.waymarkedtrails.org/hiking/{z}/{x}/{y}.png', {maxZoom:18, opacity:.8, attribution:'Wanderwege: <a href="https://hiking.waymarkedtrails.org">Waymarked Trails</a>'}).addTo(map);
 L.control.layers(baseLayers, {'Wanderwege (Waymarked Trails)': trailsOverlay}).addTo(map);
 const allLayer = L.layerGroup().addTo(map);
 const routeLayer = L.layerGroup().addTo(map);
 const PINK = '#ff00a8';
+// Beschriftungen der Wege bei „Alle auf Karte“ – erst ab Zoomstufe 12, sonst wird es unübersichtlich
+const labelLayer = L.layerGroup();
+const LABEL_MIN_ZOOM = 12;
+function updateLabelVisibility(){
+  const show = map.getZoom() >= LABEL_MIN_ZOOM;
+  if (show && !map.hasLayer(labelLayer)) labelLayer.addTo(map);
+  if (!show && map.hasLayer(labelLayer)) map.removeLayer(labelLayer);
+}
+map.on('zoomend', updateLabelVisibility);
 const placeLayer = L.layerGroup().addTo(map); // roter Kreis für den gesuchten Ort
 
 const SM = L.Projection.SphericalMercator;
@@ -355,7 +367,7 @@ async function loadDetails(base){
 // ---------- Laden ----------
 async function loadList(listPromise, label, append=false){
   const token = ++loadToken;
-  if (!append){ routes = new Map(); activeId = null; routeLayer.clearLayers(); allLayer.clearLayers(); }
+  if (!append){ routes = new Map(); activeId = null; routeLayer.clearLayers(); allLayer.clearLayers(); labelLayer.clearLayers(); }
   page = 0; render();
   setStatus(`${label} – Wegliste wird geladen…`);
   let list;
@@ -544,6 +556,7 @@ let showAllOn = false, allToken = 0;
 async function drawAll(){
   const token = ++allToken;
   allLayer.clearLayers();
+  labelLayer.clearLayers();
   if (!showAllOn) return;
   const list = filtered();
   if (!list.length){ setStatus('Keine Wege zum Anzeigen.'); return; }
@@ -567,6 +580,12 @@ async function drawAll(){
           .bindTooltip('Start: ' + r.name).on('click', e => openPopup(r, e.latlng))
           .addTo(allLayer);
         bounds.extend(pl.getBounds());
+        // Beschriftung in der Mitte des Weges
+        const pts = lines.flat();
+        const mid = pts[Math.floor(pts.length / 2)];
+        L.tooltip({permanent:true, direction:'center', className:'route-label', interactive:true})
+          .setLatLng(mid).setContent(esc(r.ref && r.ref.length <= 6 ? r.ref + ' · ' + r.name : r.name))
+          .addTo(labelLayer);
       }
       done++;
       setStatus(`Karte: ${done}/${list.length} Wege gezeichnet…`);
@@ -576,6 +595,9 @@ async function drawAll(){
   if (token !== allToken) return;
   setStatus(`${list.length} Wege auf der Karte – anklicken zum Auswählen.`);
   if (bounds.isValid()) map.fitBounds(bounds, {padding:[30,30]});
+  updateLabelVisibility();
+  const targetZoom = bounds.isValid() ? Math.min(map.getBoundsZoom(bounds, false, L.point(60,60)), map.getMaxZoom()) : map.getZoom();
+  if (targetZoom < LABEL_MIN_ZOOM) setStatus(`${list.length} Wege auf der Karte – zum Anzeigen der Namen weiter hineinzoomen.`);
 }
 function scrollToItem(id){
   const list = filtered();
