@@ -59,6 +59,8 @@
   .leaflet-tooltip.route-label{background:rgba(255,255,255,.92);border:1.5px solid #ff00a8;color:#b0006f;font-weight:600;font-size:11px;
     padding:1px 6px;border-radius:10px;box-shadow:0 1px 3px rgba(0,0,0,.2);white-space:nowrap;max-width:220px;overflow:hidden;text-overflow:ellipsis}
   .leaflet-tooltip.route-label::before{display:none}
+  .areaCount{display:inline-block;min-width:22px;padding:0 6px;margin-left:4px;border-radius:9px;background:rgba(255,255,255,.25);font-size:12px;font-weight:600}
+  .areaCount:empty{display:none}
   #progress{height:3px;background:var(--green);width:0;transition:width .2s}
   #list{overflow:auto;flex:1;min-height:0}
   .item{padding:10px 14px;border-bottom:1px solid var(--line);display:grid;grid-template-columns:36px 1fr;gap:10px;cursor:pointer}
@@ -116,7 +118,7 @@
         <button id="goPlace">Gehe zu</button>
       </div>
       <div class="row">
-        <button id="loadArea" style="flex:1">Wege im Ausschnitt laden</button>
+        <button id="loadArea" style="flex:1">Wege im Ausschnitt laden <span id="areaCount" class="areaCount"></span></button>
         <button id="addArea" class="secondary" title="Weitere Wege dazuladen, die bisherigen bleiben erhalten">+ hinzufügen</button>
       </div>
       <div class="row">
@@ -678,6 +680,22 @@ $('pager').addEventListener('click', e => {
   page += Number(b.dataset.p); render(); $('list').scrollTop = 0;
 });
 
+// Anzahl der Wege in der aktuellen Kartenansicht im Button anzeigen
+let countTimer = null, countToken = 0;
+async function updateAreaCount(){
+  const el = $('areaCount'), token = ++countToken;
+  if (map.getZoom() < 9){ el.textContent = ''; $('loadArea').title = 'Zum Laden weiter hineinzoomen'; return; }
+  el.textContent = '…';
+  try {
+    const d = await getJSON(`${API}/list/by_area?bbox=${mercBBox().map(n=>n.toFixed(1)).join(',')}&limit=100`);
+    if (token !== countToken) return;
+    const n = d && d.results ? d.results.length : 0;
+    el.textContent = n >= 100 ? '100+' : String(n);
+    $('loadArea').title = n >= 100 ? 'Mehr als 100 Wege in dieser Ansicht' : `${n} Wege in dieser Ansicht`;
+  } catch(e){ if (token === countToken) el.textContent = ''; }
+}
+map.on('moveend', () => { clearTimeout(countTimer); countTimer = setTimeout(updateAreaCount, 400); });
+
 function loadArea(append){
   if (map.getZoom() < 9){ setStatus('Bitte weiter hineinzoomen (mind. Zoomstufe 9), sonst wird es zu viel.'); return; }
   loadList(listByArea(mercBBox()), 'Kartenausschnitt', append);
@@ -719,6 +737,7 @@ $('filterToggle').onclick = () => {
   const c = $('controls').classList.toggle('collapsed');
   $('filterArrow').textContent = c ? '▾' : '▴';
 };
+updateAreaCount();
 render();
 </script>
 </body>
