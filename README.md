@@ -11,6 +11,7 @@ Die Seite läuft im Browser am Computer und auf dem Handy. Man braucht weder Ins
 ## Funktionen
 
 - **Gebiet wählen:** Nach der Ortssuche wird der Ort mit einem roten Kreis markiert. Die Karte zoomt automatisch so, dass höchstens 50 Wege in der Ansicht liegen, und lädt sie sofort. Alternativ kann man die Wege des aktuellen Kartenausschnitts laden oder direkt nach einem Wegnamen suchen. Auf dem Button steht, wie viele Wege in der aktuellen Ansicht liegen.
+- **Sparsames Laden:** Geladen werden nur Wege, die zur gewählten Kategorie passen (Standard: lokal und regional). Bereits bekannte Wege, die nicht zu den Filtern passen, werden übersprungen. Pro Klick werden höchstens 50 Wege geladen, lokale zuerst. Den Rest holt „+ weitere laden“. Die Zahl im Button zeigt vorab, wie viele passende Wege im Ausschnitt liegen.
 - **Mehrere Gebiete sammeln:** Mit „+ hinzufügen“ kommen die Wege weiterer Kartenausschnitte dazu, ohne dass die bisherigen verloren gehen.
 - **Filter:**
   - Schwierigkeit (leicht, mittel, schwer, unbekannt)
@@ -72,7 +73,8 @@ Die Datei kann am Computer per Doppelklick im Browser geöffnet werden. Eine Int
 ## Bekannte Einschränkungen
 
 - Die Namenssuche von Waymarked Trails liefert nur einige Dutzend Treffer. Für viele Wege besser über den Kartenausschnitt laden.
-- Pro Abfrage nennt die API höchstens 100 Wege. Große Ausschnitte werden deshalb automatisch in Teilstücke aufgeteilt, die Zahl auf dem Button zeigt dann „100+“.
+- Die Wegliste von Waymarked Trails enthält vor dem Laden nur Name, Kategorie und Markierung. Länge, Höhenmeter, Rundweg und Schwierigkeit sind erst bekannt, wenn die Details eines Weges geladen sind. Vorab filtern lässt sich daher nur nach Kategorie, bei schon einmal geladenen Wegen (Zwischenspeicher) nach allen Kriterien.
+- Pro Abfrage nennt die API höchstens 100 Wege. Große Ausschnitte werden deshalb automatisch in Teilstücke aufgeteilt.
 - Bei sehr langen Fernwanderwegen kann das Laden der Details etwas dauern.
 
 ## Datenquellen und Lizenzen

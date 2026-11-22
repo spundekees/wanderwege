@@ -97,6 +97,9 @@
   .route-label:hover{background:#ff00a8;color:#fff}
   .areaCount{display:inline-block;min-width:22px;padding:0 6px;margin-left:4px;border-radius:9px;background:rgba(255,255,255,.25);font-size:12px;font-weight:600}
   .areaCount:empty{display:none}
+  #moreBar{padding:0 12px}
+  #moreBar button{width:100%;margin:6px 0}
+  #moreBar:has(button[hidden]){display:none}
   #progress{height:3px;background:var(--green);width:0;transition:width .2s}
   #list{overflow:auto;flex:1;min-height:0}
   .item{padding:10px 14px;border-bottom:1px solid var(--line);display:grid;grid-template-columns:36px 1fr;gap:10px;cursor:pointer}
@@ -142,6 +145,7 @@
     .dual input[type=range]::-webkit-slider-thumb{width:28px;height:28px;margin-top:4px}
     .dual input[type=range]::-moz-range-thumb{width:24px;height:24px}
     .dual-val{font-size:14px;min-width:100px}
+    #status{flex-wrap:wrap}
     details[open] .hint{width:min(300px,85vw)}
   }
 </style>
@@ -189,7 +193,7 @@
         </div>
 
         <span class="lbl">Länge</span>
-        <div class="dual" data-min="0" data-max="40" data-step="1" data-unit="km" data-lo="lenMin" data-hi="lenMax">
+        <div class="dual" data-min="0" data-max="40" data-step="0.1" data-dec="1" data-unit="km" data-lo="lenMin" data-hi="lenMax">
           <div class="dual-track"><div class="dual-fill"></div>
             <input type="range" class="lo" aria-label="Länge von"><input type="range" class="hi" aria-label="Länge bis"></div>
           <div class="dual-val"></div>
@@ -197,7 +201,7 @@
         </div>
 
         <span class="lbl">Höhenmeter ↑</span>
-        <div class="dual" data-min="0" data-max="1500" data-step="50" data-unit="m" data-lo="hmMin" data-hi="hmMax">
+        <div class="dual" data-min="0" data-max="1500" data-step="1" data-dec="0" data-unit="m" data-lo="hmMin" data-hi="hmMax">
           <div class="dual-track"><div class="dual-fill"></div>
             <input type="range" class="lo" aria-label="Höhenmeter von"><input type="range" class="hi" aria-label="Höhenmeter bis"></div>
           <div class="dual-val"></div>
@@ -215,8 +219,8 @@
         <div class="chips" id="groupChips">
           <label class="chip"><input type="checkbox" value="LOC" checked>lokal</label>
           <label class="chip"><input type="checkbox" value="REG" checked>regional</label>
-          <label class="chip"><input type="checkbox" value="NAT" checked>national</label>
-          <label class="chip"><input type="checkbox" value="INT" checked>int.</label>
+          <label class="chip"><input type="checkbox" value="NAT">national</label>
+          <label class="chip"><input type="checkbox" value="INT">int.</label>
         </div>
 
         <span class="lbl">Sortierung</span>
@@ -236,6 +240,7 @@
     </div>
     <div id="progress"></div>
     <div id="status"><span id="statusText">Ort suchen – die Wege in der Umgebung werden automatisch geladen.</span><span class="statusRight"><span id="count"></span><button id="showAll" class="secondary small" title="Alle gefilterten Wege auf der Karte anzeigen">🗺️ Alle auf Karte</button></span></div>
+    <div id="moreBar"><button id="moreBtn" class="secondary small" hidden></button></div>
     <div id="list"></div>
     <div id="pager"></div>
   </aside>
@@ -305,6 +310,16 @@ async function getJSON(url){
   return r.json();
 }
 
+const areaListCache = new Map();
+function listByAreaCached(bbox){
+  const key = bbox.map(n => Math.round(n/50)).join(',');
+  if (!areaListCache.has(key)){
+    if (areaListCache.size > 30) areaListCache.clear();
+    const p = listByArea(bbox); areaListCache.set(key, p);
+    p.catch(() => areaListCache.delete(key));
+  }
+  return areaListCache.get(key);
+}
 async function listByArea(bbox, depth=0){
   const data = await getJSON(`${API}/list/by_area?bbox=${bbox.map(n=>n.toFixed(1)).join(',')}&limit=100`);
   let res = data ? data.results : [];
@@ -435,6 +450,16 @@ async function loadDetails(base){
 }
 
 // ---------- Laden ----------
+// höchstens so viele Wege auf einmal nachladen; der Rest über „Weitere laden“
+const MAX_LOAD = 50;
+let pendingList = [];
+function updateMoreButton(){
+  const b = $('moreBtn'); if (!b) return;
+  const f = currentFilter();
+  const n = pendingList.filter(x => !routes.has(x.id) && preMatches(x, f)).length;
+  b.hidden = !n;
+  b.textContent = `+ ${Math.min(n, MAX_LOAD)} weitere laden` + (n > MAX_LOAD ? ` (von ${n})` : '');
+}
 async function loadList(listPromise, label, append=false, fit=true){
   const token = ++loadToken;
   if (!append){ routes = new Map(); activeId = null; routeLayer.clearLayers(); allLayer.clearLayers(); labelLayer.clearLayers(); }
@@ -444,8 +469,17 @@ async function loadList(listPromise, label, append=false, fit=true){
   try { list = await listPromise; }
   catch(e){ setStatus('Fehler beim Laden der Wegliste: ' + e.message + ' (Internetverbindung?)'); return; }
   if (token !== loadToken) return;
-  list = list.filter(b => !routes.has(b.id));
-  if (!list.length){ setStatus(append ? `Keine neuen Wege gefunden – insgesamt ${routes.size}.` : 'Keine Wanderwege gefunden.'); render(); return; }
+  const f = currentFilter();
+  const found = list.length;
+  list = list.filter(b => !routes.has(b.id) && preMatches(b, f));
+  const skipped = found - list.length;
+  // lokale und regionale Wege zuerst, Fernwanderwege zuletzt (die sind groß und langsam)
+  const PRIO = {LOC:0, REG:1, NAT:2, INT:3};
+  list.sort((a,b) => (PRIO[a.group] ?? 4) - (PRIO[b.group] ?? 4));
+  pendingList = list.slice(MAX_LOAD);
+  list = list.slice(0, MAX_LOAD);
+  updateMoreButton();
+  if (!list.length){ setStatus(append ? `Keine neuen passenden Wege – insgesamt ${routes.size}.` : (found ? `Keiner der ${found} Wege passt zu Kategorie/Filtern.` : 'Keine Wanderwege gefunden.')); render(); return; }
 
   let done = 0; const total = list.length;
   const queue = [...list];
@@ -464,7 +498,7 @@ async function loadList(listPromise, label, append=false, fit=true){
   await Promise.all(Array.from({length:5}, worker));
   if (token !== loadToken) return;
   saveCache(); setProgress(0);
-  setStatus(`${label} – ${total} Wege geladen, insgesamt ${routes.size}.`);
+  setStatus(`${label} – ${total} Wege geladen${pendingList.length ? `, ${pendingList.length} weitere verfügbar` : ''}.`);
   updateSliderRanges();
   render();
   clearTimeout(redrawTimer);   // evtl. durch die Regler ausgelöstes Neuzeichnen ersetzen
@@ -486,11 +520,14 @@ const $ = id => document.getElementById(id);
 const checked = id => [...document.querySelectorAll(`#${id} input:checked`)].map(i=>i.value);
 const num = id => { const v = $(id).value; return v === '' ? null : Number(v); };
 
-function filtered(){
-  const diffs = checked('diffChips'), groups = checked('groupChips');
-  const lMin = num('lenMin'), lMax = num('lenMax'), hMin = num('hmMin'), hMax = num('hmMax');
-  const round = $('round').value, incl = $('inclUnknown').checked;
-  const out = [...routes.values()].filter(r => {
+function currentFilter(){
+  return { diffs: checked('diffChips'), groups: checked('groupChips'),
+    lMin: num('lenMin'), lMax: num('lenMax'), hMin: num('hmMin'), hMax: num('hmMax'),
+    round: $('round').value, incl: $('inclUnknown').checked };
+}
+function matches(r, f){
+  const {diffs, groups, lMin, lMax, hMin, hMax, round, incl} = f;
+  {
     if (!diffs.includes(r.diff)) return false;
     if (r.group && !groups.includes(r.group)) return false;
     if (lMin!==null || lMax!==null){
@@ -504,7 +541,17 @@ function filtered(){
     if (round==='yes' && r.round!==true) return false;
     if (round==='no' && r.round!==false) return false;
     return true;
-  });
+  }
+}
+// Vorab-Prüfung vor dem Laden: Kategorie ist immer bekannt, alles andere nur bei Wegen im Zwischenspeicher
+function preMatches(base, f){
+  if (base.group && !f.groups.includes(base.group)) return false;
+  const c = cache[base.id];
+  return c ? matches(c, f) : true;
+}
+function filtered(){
+  const f = currentFilter();
+  const out = [...routes.values()].filter(r => matches(r, f));
   const s = $('sort').value;
   const nn = v => v==null ? Infinity : v;
   out.sort((a,b) => s==='len' ? nn(a.length)-nn(b.length) : s==='hm' ? nn(a.up)-nn(b.up)
@@ -813,6 +860,8 @@ $('list').addEventListener('click', e => {
 let redrawTimer = null;
 const refilter = () => {
   page = 0; render(); $('list').scrollTop = 0;
+  updateMoreButton();
+  clearTimeout(countTimer); countTimer = setTimeout(updateAreaCount, 300);
   // ausgewählte Route ausblenden, wenn sie nicht mehr zu den Filtern passt
   if (activeId != null && !filtered().some(r => r.id === activeId)){ activeId = null; routeLayer.clearLayers(); map.closePopup(); }
   // Karte ohne Herumspringen an die neuen Filter anpassen
@@ -828,17 +877,19 @@ setShowAllButton();
 ['diffChips','groupChips'].forEach(id => $(id).addEventListener('change', refilter));
 ['lenMin','lenMax','hmMin','hmMax'].forEach(id => $(id).addEventListener('input', refilter));
 // Doppelschieberegler: ganz links/rechts = keine Grenze; schreiben in die versteckten Felder lenMin/lenMax/hmMin/hmMax
+const r1 = v => Math.round(v * 10) / 10;
 const duals = {};
 document.querySelectorAll('.dual').forEach(d => {
   let min = +d.dataset.min, max = +d.dataset.max, step = +d.dataset.step;
   const unit = d.dataset.unit;
   const lo = d.querySelector('.lo'), hi = d.querySelector('.hi'), fill = d.querySelector('.dual-fill'), out = d.querySelector('.dual-val');
   const loField = $(d.dataset.lo), hiField = $(d.dataset.hi);
-  const fmt = v => v.toLocaleString('de-DE', {maximumFractionDigits:1});
+  const dec = +(d.dataset.dec || 0);
+  const fmt = v => v.toLocaleString('de-DE', {minimumFractionDigits:dec, maximumFractionDigits:dec});
   function applyAttrs(){ [lo, hi].forEach(i => { i.min = min; i.max = max; i.step = step; }); }
   applyAttrs(); lo.value = min; hi.value = max;
   function update(e){
-    let a = +lo.value, b = +hi.value;
+    let a = dec ? r1(+lo.value) : Math.round(+lo.value), b = dec ? r1(+hi.value) : Math.round(+hi.value);
     if (a > b){ if (e && e.target === lo) lo.value = a = b; else hi.value = b = a; }
     const span = (max - min) || 1;
     fill.style.left = ((a-min)/span*100) + '%';
@@ -868,18 +919,16 @@ document.querySelectorAll('.dual').forEach(d => {
   update();
   duals[d.dataset.lo] = {setRange};
 });
-function niceStep(range, steps){ return steps.find(s => range / s <= 60) || steps[steps.length-1]; }
+// Länge auf 0,1 km genau, Höhenmeter auf 1 m genau – Bereich exakt von kürzester bis längster Route
 function updateSliderRanges(){
   const all = [...routes.values()];
   const lens = all.map(r => r.length).filter(v => v != null).map(v => v/1000);
   const hms  = all.map(r => r.up).filter(v => v != null);
   if (lens.length){
-    const st = niceStep(Math.max(...lens) - Math.min(...lens), [0.5, 1, 2, 5, 10]);
-    duals.lenMin.setRange(Math.floor(Math.min(...lens)/st)*st, Math.ceil(Math.max(...lens)/st)*st, st);
+    duals.lenMin.setRange(Math.floor(Math.min(...lens)*10)/10, Math.ceil(Math.max(...lens)*10)/10, 0.1);
   }
   if (hms.length){
-    const st = niceStep(Math.max(...hms) - Math.min(...hms), [10, 25, 50, 100, 250]);
-    duals.hmMin.setRange(Math.floor(Math.min(...hms)/st)*st, Math.ceil(Math.max(...hms)/st)*st, st);
+    duals.hmMin.setRange(Math.floor(Math.min(...hms)), Math.ceil(Math.max(...hms)), 1);
   }
 }
 ['round','sort','inclUnknown'].forEach(id => $(id).addEventListener('change', refilter));
@@ -895,20 +944,26 @@ async function updateAreaCount(){
   if (map.getZoom() < 9){ el.textContent = ''; $('loadArea').title = 'Zum Laden weiter hineinzoomen'; return; }
   el.textContent = '…';
   try {
-    const d = await getJSON(`${API}/list/by_area?bbox=${mercBBox().map(n=>n.toFixed(1)).join(',')}&limit=100`);
+    const list = await listByAreaCached(mercBBox());
     if (token !== countToken) return;
-    const n = d && d.results ? d.results.length : 0;
-    el.textContent = n >= 100 ? '100+' : String(n);
-    $('loadArea').title = n >= 100 ? 'Mehr als 100 Wege in dieser Ansicht' : `${n} Wege in dieser Ansicht`;
+    const f = currentFilter();
+    const match = list.filter(b => preMatches(b, f));
+    const unknown = match.filter(b => !cache[b.id]).length;
+    const n = Math.min(match.length, MAX_LOAD);
+    el.textContent = match.length > MAX_LOAD ? `${MAX_LOAD} von ${match.length}` : String(match.length);
+    $('loadArea').title = `${list.length} Wege in der Ansicht, ${match.length} passen zur Kategorie bzw. zu den Filtern` +
+      (unknown ? ` (bei ${unknown} sind Länge, Höhenmeter und Rundweg erst nach dem Laden bekannt)` : '') +
+      (match.length > MAX_LOAD ? `. Geladen werden zunächst ${n}.` : '.');
   } catch(e){ if (token === countToken) el.textContent = ''; }
 }
 map.on('moveend', () => { clearTimeout(countTimer); countTimer = setTimeout(updateAreaCount, 400); });
 
 function loadArea(append){
   if (map.getZoom() < 9){ setStatus('Bitte weiter hineinzoomen (mind. Zoomstufe 9), sonst wird es zu viel.'); return; }
-  loadList(listByArea(mercBBox()), 'Kartenausschnitt', append);
+  loadList(listByAreaCached(mercBBox()), 'Kartenausschnitt', append);
 }
 $('loadArea').onclick = () => loadArea(false);
+$('moreBtn').onclick = () => { const rest = pendingList; pendingList = []; loadList(Promise.resolve(rest), 'Weitere Wege', true, false); };
 $('addArea').onclick = () => loadArea(true);
 // Zoomstufe finden, bei der um den Ort herum höchstens `max` Wege in der Ansicht liegen
 const MAX_ROUTES_AFTER_SEARCH = 50;
@@ -956,7 +1011,7 @@ async function goPlace(){
     setStatus(`${name} gefunden – passende Zoomstufe wird gesucht…`);
     const z = await zoomForMaxRoutes(center, MAX_ROUTES_AFTER_SEARCH);
     map.setView(center, z, {animate:false});
-    loadList(listByArea(mercBBox()), name, false, false);   // Zoom beibehalten, nicht auf lange Fernwege herauszoomen
+    loadList(listByAreaCached(mercBBox()), name, false, false);   // Zoom beibehalten, nicht auf lange Fernwege herauszoomen
   } catch(e){ setStatus('Ortssuche fehlgeschlagen.'); }
 }
 $('goPlace').onclick = goPlace;
